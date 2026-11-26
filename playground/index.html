@@ -83,6 +83,47 @@
 
     <section class="panel output" aria-labelledby="output-title">
       <h2 id="output-title" class="label bar">Take it home</h2>
+      <div class="generate">
+        <p class="gen-lead">Get a finished profile in two steps: generate it here, then upload it on GitHub. No Actions needed.</p>
+        <button class="btn solid big" id="generate" type="button" disabled aria-describedby="gen-note">Generate my profile</button>
+        <p id="gen-note" class="hint" hidden></p>
+        <p id="gen-status" class="hint gen-status" role="status" aria-live="polite"></p>
+      </div>
+
+      <section id="steps" class="steps" aria-labelledby="steps-title" hidden>
+        <h3 id="steps-title" class="label bar" tabindex="-1">Now put it on GitHub</h3>
+        <p id="steps-summary" class="hint"></p>
+        <ol class="steps-list">
+          <li><span class="badge" aria-hidden="true">1</span><div>
+            <p><strong>Create your profile repo.</strong></p>
+            <p><a class="btn" id="step-create" target="_blank" rel="noopener">Create your profile repo<span class="sr-only"> (opens in a new tab)</span></a></p>
+            <p class="hint" id="step-create-note"></p></div></li>
+          <li><span class="badge" aria-hidden="true">2</span><div>
+            <p><strong>Open the upload page</strong> of that repo.</p>
+            <p><a class="btn" id="step-upload" target="_blank" rel="noopener">Open the upload page<span class="sr-only"> (opens in a new tab)</span></a></p>
+            <p class="hint">If your repo’s main branch isn’t called main, open the repo and choose <em>Add file → Upload files</em>.</p></div></li>
+          <li><span class="badge" aria-hidden="true">3</span><div>
+            <p><strong>Unzip and drag.</strong> Unzip <code id="step-zipname"></code>, open the folder, select everything inside it (not the folder itself) and drag it onto the upload page. Then click <em>Commit changes</em>.</p>
+            <p class="warn"><strong>Heads up:</strong> this replaces your current README.md. Download it first if you want to keep anything.</p></div></li>
+          <li><span class="badge" aria-hidden="true">4</span><div>
+            <p><strong>Done!</strong> See it at <a id="step-done" target="_blank" rel="noopener">github.com<span class="sr-only"> (opens in a new tab)</span></a>.</p></div></li>
+        </ol>
+        <div class="optional" id="step-pages" hidden>
+          <h4 class="label">Optional: the cassette’s player page</h4>
+          <p>Clicking your mixtape opens a player page in <code>docs/</code>. It only works once GitHub Pages is on: <em>Settings → Pages → Deploy from a branch → main, /docs → Save</em>.</p>
+          <p><a class="btn" id="step-pages-link" target="_blank" rel="noopener">Open Pages settings<span class="sr-only"> (opens in a new tab)</span></a></p>
+        </div>
+        <div class="optional">
+          <h4 class="label">Optional: keep it up to date automatically</h4>
+          <p>Only needed if you want to edit <code>pernik.toml</code> on GitHub later and have the pictures redrawn for you. Your profile works without it.</p>
+          <ol class="plain">
+            <li><a class="btn" id="step-workflow" target="_blank" rel="noopener">Add the update workflow<span class="sr-only"> (opens in a new tab)</span></a> The file is filled in for you; click <em>Commit changes</em>.</li>
+            <li><a id="step-actions" target="_blank" rel="noopener">Open Actions settings<span class="sr-only"> (opens in a new tab)</span></a>, then under <em>Workflow permissions</em> choose <em>Read and write permissions</em> and click <em>Save</em>.</li>
+          </ol>
+        </div>
+      </section>
+
+      <h3 class="label sub">Or copy the files yourself</h3>
       <p id="logo-note" class="note" hidden></p>
       <div class="tabs" role="tablist" aria-label="Files to copy">
         <button role="tab" id="tab-toml" aria-controls="pane-toml" aria-selected="true">pernik.toml</button>

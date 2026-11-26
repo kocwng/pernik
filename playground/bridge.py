@@ -5,8 +5,11 @@ worker.js unpacks pernik.zip next to this file, imports it and calls:
     setup()                 patch the bits a browser can't do, return {"version", "python"}
     set_demo(bytes, secs)   the demo song (bytes) and its length (measured by the page)
     put_file(path, text)    an uploaded logo at assets/logos/<name>.svg (None removes it)
+    put_song(path, bytes, secs)  the user's own song for a mixtape (None removes it)
     render(payload_json)    draw one widget in both modes -> JSON {light, dark, alt, logs, ...}
-    make_zip(toml, readme, user)  run Pernik's real build + check on a fresh virtual repo -> zip bytes
+    make_zip(toml, readme, user, profile)  run Pernik's real build + check on a fresh virtual repo
+                            -> zip bytes; profile=True makes the "Generate my profile" zip (the
+                            filled README, uploaded songs included, no demo song, no problem file)
 
 What is replaced for the browser:
   - stack._fetch (urllib) -> a synchronous XMLHttpRequest, which a worker may make. jsDelivr
@@ -34,7 +37,8 @@ BUILD = '/build'               # a fresh repo for each "download" build
 CACHE = os.path.join(REPO, '.pernik-cache')
 AUDIO = ('.mp3', '.m4a', '.ogg', '.wav', '.flac', '.aac', '.opus')
 LOGO_PATH = re.compile(r'assets/logos/[a-z0-9][a-z0-9._-]{0,60}\.svg')
-_state = {'demo': None, 'secs': 0.0, 'themes': {}, 'files': {}}
+SONG_PATH = re.compile(r'[A-Za-z0-9_][A-Za-z0-9._/-]{0,120}')
+_state = {'demo': None, 'secs': 0.0, 'themes': {}, 'files': {}, 'songs': {}}
 
 
 # ---------------------------------------------------------------- browser replacements
@@ -65,6 +69,9 @@ def setup():
     orig = mixtape.duration
 
     def duration(path, chords_file=None):
+        song = _state['songs'].get(_rel(path))
+        if song and song[1]:
+            return song[1]
         return orig(path, chords_file) or _state['secs']
     mixtape.duration = duration
     os.makedirs(CACHE, exist_ok=True)
@@ -77,6 +84,34 @@ def set_demo(data, secs):
     _state['secs'] = float(secs or 0)
     from pernik.widgets import mixtape
     mixtape._durations.clear()
+
+
+def _rel(path):
+    for root in (REPO, BUILD):
+        if str(path).startswith(root + '/'):
+            return str(path)[len(root) + 1:]
+    return str(path)
+
+
+def put_song(path, data, secs):
+    """The user's own song for a mixtape, kept for previews and for the profile zip."""
+    path = posixpath.normpath(str(path or ''))
+    if not SONG_PATH.fullmatch(path) or '..' in path.split('/') or not path.lower().endswith(AUDIO):
+        return False
+    full = os.path.join(REPO, path)
+    if os.path.exists(full):
+        os.remove(full)
+    if data is None:
+        _state['songs'].pop(path, None)
+    else:
+        raw = bytes(data.to_bytes() if hasattr(data, 'to_bytes') else data)
+        _state['songs'][path] = (raw, float(secs or 0))
+        os.makedirs(os.path.dirname(full) or REPO, exist_ok=True)
+        with open(full, 'wb') as f:
+            f.write(raw)
+    from pernik.widgets import mixtape
+    mixtape._durations.clear()
+    return True
 
 
 def _ensure_song(root, song):
@@ -190,7 +225,7 @@ def _clean_logs(text, wid):
 
 # ---------------------------------------------------------------- the whole profile
 
-def make_zip(toml_text, readme_text, user):
+def make_zip(toml_text, readme_text, user, profile=False):
     """Run the real `pernik build` and `pernik check` on a fresh repo; zip what it made."""
     import tomllib
 
@@ -201,7 +236,15 @@ def make_zip(toml_text, readme_text, user):
     os.symlink(CACHE, os.path.join(BUILD, '.pernik-cache'))
     widgets = tomllib.loads(toml_text).get('widget', [])
     for w in widgets:
-        if w.get('kind') == 'mixtape':
+        if w.get('kind') != 'mixtape':
+            continue
+        rel = posixpath.normpath(str(w.get('song') or '').strip().removeprefix('./'))
+        if rel in _state['songs']:            # the user's own song goes in as is
+            full = os.path.join(BUILD, rel)
+            os.makedirs(os.path.dirname(full) or BUILD, exist_ok=True)
+            with open(full, 'wb') as f:
+                f.write(_state['songs'][rel][0])
+        elif not profile:                     # the plain SVG zip may borrow the demo song
             _ensure_song(BUILD, w.get('song'))
     logos = _logo_files(widgets)
     for rel in logos:                     # uploaded logos go in at the paths pernik.toml names
@@ -235,11 +278,12 @@ def make_zip(toml_text, readme_text, user):
         for folder, dirs, files in os.walk(BUILD):
             dirs[:] = sorted(d for d in dirs if not d.startswith('.'))
             for name in sorted(files):
-                if name.lower().endswith(AUDIO):      # the demo song stays out of your repo
-                    continue
+                rel = os.path.relpath(os.path.join(folder, name), BUILD)
+                if name.lower().endswith(AUDIO) and rel not in _state['songs']:
+                    continue                          # the demo song stays out of your repo
                 path = os.path.join(folder, name)
                 z.write(path, os.path.relpath(path, BUILD))
-        if problems:
+        if problems and not profile:
             z.writestr('pernik-problems.txt', '\n'.join(problems) + '\n')
     _state['last_build'] = {'problems': problems, 'files': len(manifest), 'logos': logos,
                             'log': [ln for ln in log.getvalue().splitlines() if ln.strip()][:40]}

@@ -26,7 +26,8 @@
     footer: { name: '', link: '' },
   };
   const NUMERIC_LISTS = new Set(['hero.hp']);
-  const START = { mixtape: { song: 'docs/music/demo.mp3' } };   // what a new widget starts with
+  const START = { mixtape: { song: 'docs/music/demo.mp3' }, text: { md: '' } };
+  const BASE_TEXT_ID = 'text';   // what a new widget starts with
   const HINTS = {
     'hero.greeting': 'One or two lines.',
     'hero.chords': 'A chords.json in your repo for the mascot to strum along to.',
@@ -91,8 +92,13 @@ jobs:
         with:
           config: pernik.toml
 `;
-  const WORDS = 'Write a few lines about yourself here. Pernik only changes what sits between its markers.';
-  const USER_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
+  // GitHub usernames: 1-39 letters/digits, single hyphens, not at either end
+  const USER_RE = /^(?=.{1,39}$)[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/;
+  const TEXT_HINT = 'Shown as written, between the pictures. Markdown works: **bold**, *italic*, - lists, [links](https://…), # headings, emoji 🎉.';
+  const SONG_MAX = 10 * 1024 * 1024;            // bytes per uploaded song
+  const SONG_PATH_RE = /^[A-Za-z0-9_][A-Za-z0-9._/-]{0,120}$/;
+  const REPO_URL = 'https://github.com/kocwng/pernik';
+  const defaultText = (user) => `Hi! I’m @${user} 👋\n\n- I work on …\n- I’m learning …\n- You can reach me at …\n\n*(Replace these lines with a few words about yourself.)*`;
   const ID_RE = /^[A-Za-z0-9_-]+$/;
   const LOGO_MAX = 200 * 1024;                  // bytes per uploaded logo
   const HASH_MAX = 16 * 1024;                   // share links keep uploaded logos only below this
@@ -112,6 +118,8 @@ jobs:
   let demoAsked = false;
   let lastMs = null;
   const files = new Map();      // uploaded logos: repo path -> {text, rev}
+  const songs = new Map();      // uploaded songs: repo path -> {secs, name, size}
+  let lastGen = null;           // what the last "Generate my profile" asked for
 
   const $ = (s, el = document) => el.querySelector(s);
   const store = {
@@ -149,6 +157,7 @@ jobs:
   }
   /** Only the options that differ from Pernik's own defaults (what goes in pernik.toml). */
   function clean(w) {
+    if (w.kind === 'text') return { md: String(w.opts.md || '') };
     const out = {};
     const spec = (specs[w.kind] || {}).defaults || {};
     const extra = EXTRAS[w.kind] || {};
@@ -210,7 +219,7 @@ jobs:
     else if (m.type === 'ready') onReady(m);
     else if (m.type === 'fatal') setLoading(`Couldn’t load the renderer (${m.text}). The default looks still show; reload to try again.`, 'failed');
     else if (m.type === 'rendered') onRendered(m);
-    else if (m.type === 'zip') onZip(m);
+    else if (m.type === 'zip') (m.profile ? onProfile(m) : onZip(m));
   };
   worker.onerror = (e) => setLoading(`The renderer stopped (${e.message || 'worker error'}). Reload to try again.`, 'failed');
   worker.postMessage({ type: 'init' });
@@ -226,6 +235,7 @@ jobs:
     setLoading(`Renderer ready: Pernik ${m.version} on Python ${m.python}, running in your browser.`, 'done');
     $('#engine').textContent = `Pernik ${m.version} + Pyodide ${m.pyodide} (Python ${m.python})`;
     $('#download').disabled = false;
+    $('#generate').disabled = false;
     flush();
   }
   function measureDemo() {
@@ -243,7 +253,7 @@ jobs:
   }
 
   function keyOf(w) {
-    const extra = w.kind === 'mixtape' ? demoSecs
+    const extra = w.kind === 'mixtape' ? [demoSecs, (songs.get(w.opts.song) || {}).secs || 0]
       : w.kind === 'stack' ? Object.values(w.opts.logos || {}).map((sp) => (files.get(logoFile(sp)) || {}).rev || '') : 0;
     return JSON.stringify([state.theme, state.user, w.id, w.kind, clean(w), extra]);
   }
@@ -251,6 +261,7 @@ jobs:
     measureDemo();
     if (!workerReady) return;
     for (const w of state.widgets) {
+      if (w.kind === 'text') continue;            // your own words: drawn by the page, not Pernik
       const key = keyOf(w);
       const c = cache.get(w.uid);
       if ((c && c.key === key) || pending.get(w.uid) === key) continue;
@@ -295,9 +306,10 @@ jobs:
     const st = $('#status');
     if (!workerReady) { st.textContent = ''; return; }
     if (pending.size) { st.textContent = `Drawing ${pending.size} widget${pending.size > 1 ? 's' : ''}…`; return; }
-    const bad = state.widgets.filter((w) => (cache.get(w.uid) || {}).result?.error);
+    const real = state.widgets.filter((w) => w.kind !== 'text');
+    const bad = real.filter((w) => (cache.get(w.uid) || {}).result?.error);
     if (bad.length) st.textContent = `${bad.length} widget${bad.length > 1 ? 's have' : ' has'} a problem: ${bad.map((w) => w.id).join(', ')}.`;
-    else st.textContent = `Up to date: ${state.widgets.length} widget${state.widgets.length === 1 ? '' : 's'}` + (lastMs !== null ? `, last one drawn in ${lastMs} ms.` : '.');
+    else st.textContent = `Up to date: ${real.length} widget${real.length === 1 ? '' : 's'}` + (lastMs !== null ? `, last one drawn in ${lastMs} ms.` : '.');
   }
 
   // ------------------------------------------------------------------ preview
@@ -309,14 +321,17 @@ jobs:
         col.append(h('p', { class: 'empty', text: 'No widgets yet. Add one from the list.' }));
         continue;
       }
-      state.widgets.forEach((w, i) => {
-        col.append(h('div', { class: 'w', 'data-uid': w.uid, 'data-mode': mode }));
-        if (i === 0) col.append(h('p', { class: 'words', text: WORDS }));
+      state.widgets.forEach((w) => {
+        col.append(h('div', { class: 'w' + (w.kind === 'text' ? ' md' : ''), 'data-uid': w.uid, 'data-mode': mode }));
       });
     }
     state.widgets.forEach(paintWidget);
   }
   function paintWidget(w) {
+    if (w.kind === 'text') {
+      for (const box of document.querySelectorAll(`.w[data-uid="${w.uid}"]`)) box.replaceChildren(...mdBlocks(w.opts.md));
+      return;
+    }
     const c = cache.get(w.uid);
     const fresh = c && c.key === keyOf(w);
     const busy = workerReady && pending.has(w.uid);
@@ -379,6 +394,8 @@ jobs:
       const doc = ((specs[kind] || {}).doc || '').split('\n')[0];
       box.append(h('button', { class: 'btn', type: 'button', 'data-kind': kind, title: doc, 'aria-label': `Add ${kind}: ${doc}` }, `+ ${kind}`));
     }
+    box.append(h('button', { class: 'btn', type: 'button', 'data-kind': 'text', title: 'Your own words, in markdown, between the pictures',
+      'aria-label': 'Add text: your own words, in markdown, between the pictures' }, '+ text'));
   }
   function kinds() {
     return Object.keys(specs).sort((a, b) => (KIND_ORDER.indexOf(a) + 1 || 99) - (KIND_ORDER.indexOf(b) + 1 || 99) || a.localeCompare(b));
@@ -387,6 +404,7 @@ jobs:
     const b = e.target.closest('[data-kind]');
     if (!b) return;
     const w = newWidget(b.dataset.kind);
+    if (w.kind === 'text') w.opts.md = 'Write something here.';
     state.widgets.push(w);
     openSet.add(w.uid);
     structural({ uid: w.uid, focus: 'toggle' });
@@ -409,13 +427,13 @@ jobs:
   function card(w, i) {
     const open = openSet.has(w.uid);
     const n = state.widgets.length;
-    const name = `${w.kind} “${w.id}”`;
+    const name = w.kind === 'text' ? `text “${snippet(w)}”` : `${w.kind} “${w.id}”`;
     const li = h('li', { class: 'wcard' + (open ? ' open' : ''), 'data-uid': w.uid },
       h('div', { class: 'whead' },
         h('button', { class: 'wtoggle', type: 'button', 'aria-expanded': open ? 'true' : 'false', 'aria-controls': 'wb-' + w.uid, 'data-act': 'toggle', 'aria-label': `${i + 1}. ${name} options` },
           h('span', { class: 'wnum', 'aria-hidden': 'true', text: String(i + 1) }),
           h('span', { class: 'wkind', text: w.kind }),
-          h('span', { class: 'wid', id: 'wi-' + w.uid, text: w.id }),
+          h('span', { class: 'wid', id: 'wi-' + w.uid, text: w.kind === 'text' ? snippet(w) : w.id }),
           h('span', { class: 'wstate', id: 'ws-' + w.uid }),
           h('span', { class: 'caret', 'aria-hidden': 'true' })),
         h('button', { class: 'icon', type: 'button', 'data-act': 'up', disabled: i === 0, 'aria-label': `Move ${name} up`, title: 'Move up', text: '↑' }),
@@ -426,6 +444,14 @@ jobs:
     return li;
   }
   function form(w) {
+    if (w.kind === 'text') {
+      const fid = `f-${w.uid}-md`;
+      const ta = h('textarea', { id: fid, rows: 6, 'data-key': 'md', 'data-type': 'md', 'aria-describedby': fid + '-h' });
+      ta.value = w.opts.md || '';
+      return [h('div', { class: 'field' },
+        h('label', { class: 'label', for: fid, text: 'your words (markdown)' }), ta,
+        h('p', { class: 'hint', id: fid + '-h', text: TEXT_HINT }))];
+    }
     const spec = specs[w.kind] || { defaults: {}, doc: '' };
     const dh = docHints(spec.doc);
     const fid = (k) => `f-${w.uid}-${k}`;
@@ -477,6 +503,7 @@ jobs:
         h('p', { class: 'hint', id: fid('_id') + '-h', text: 'Letters, digits, - and _. Used for file names and <!-- pernik:id -->.' })),
       main,
       w.kind === 'stack' ? logosSection(w) : null,
+      w.kind === 'mixtape' ? songSection(w) : null,
       extras.length ? h('details', {}, h('summary', { text: `${KOMIK_ONLY}: more options` }), extras) : null,
       more.length ? h('details', {}, h('summary', { text: 'Advanced' }), more) : null,
       h('ul', { class: 'wlogs', id: 'wl-' + w.uid, hidden: true, 'aria-label': `Notes from ${w.id}` }),
@@ -486,6 +513,7 @@ jobs:
   function paintCardState(li, w) {
     const c = cache.get(w.uid);
     const st = li.querySelector('.wstate');
+    if (w.kind === 'text') { st.textContent = ''; return; }
     const fresh = c && c.key === keyOf(w);
     st.classList.toggle('bad', !!(c && c.result.error));
     st.textContent = !workerReady ? '' : (pending.has(w.uid) || !fresh) ? 'drawing…'
@@ -505,6 +533,7 @@ jobs:
       }
     }
     if (w.kind === 'stack') paintLogos(li, w);
+    if (w.kind === 'mixtape') paintSong(li, w);
   }
   function paintCard(w) {
     const li = document.querySelector(`.wcard[data-uid="${w.uid}"]`);
@@ -574,6 +603,14 @@ jobs:
       const raw = type === 'bool' ? el.checked : el.value;
       w.opts[key] = parseValue(type, raw, def, el.dataset.numericList === '1');
       if (w.kind === 'stack' && key === 'icons') paintCard(w);
+      if (w.kind === 'text') {
+        w.auto = false;
+        paintWidget(w);
+        $('#wi-' + w.uid).textContent = snippet(w);
+        li.querySelectorAll('.whead [aria-label]').forEach((b) => {
+          b.setAttribute('aria-label', b.getAttribute('aria-label').replace(/“.*”/, `“${snippet(w)}”`));
+        });
+      }
     }
     const instant = el.tagName === 'SELECT' || el.type === 'checkbox';
     schedule(instant ? 30 : 300);
@@ -589,6 +626,14 @@ jobs:
       : 'GitHub usernames use letters, digits and single hyphens (up to 39).';
     if (!ok) return;
     state.user = v || 'octocat';
+    for (const w of state.widgets) {          // the untouched starter text follows the username
+      if (w.kind !== 'text' || !w.auto) continue;
+      w.opts.md = defaultText(state.user);
+      const ta = document.getElementById(`f-${w.uid}-md`);
+      if (ta) ta.value = w.opts.md;
+      paintWidget(w);
+    }
+    $('#gen-status').textContent = '';
     schedule(400);
   });
 
@@ -768,6 +813,216 @@ jobs:
     schedule(300);
   });
 
+  // ------------------------------------------------------------------ text blocks (markdown)
+  function snippet(w) {
+    const line = String(w.opts.md || '').split('\n').map((l) => l.replace(/[#>*_`[\]()-]+/g, ' ').trim()).find(Boolean) || 'empty';
+    return line.length > 28 ? line.slice(0, 27) + '…' : line;
+  }
+  const SAFE_URL = /^(https?:\/\/|mailto:)/i;
+  // a small, safe subset of GitHub markdown, built as DOM nodes (never innerHTML)
+  const INLINE = /(`+)([^`]|[^`][\s\S]*?[^`])\1(?!`)|\*\*(\S(?:[\s\S]*?\S)?)\*\*|__(\S(?:[\s\S]*?\S)?)__|\*(\S(?:[\s\S]*?\S)?)\*|(?<![A-Za-z0-9])_(\S(?:[\s\S]*?\S)?)_(?![A-Za-z0-9])|\[([^\]]+)\]\(([^)\s]+)\)|(https?:\/\/[^\s<]*[^\s<.,;:!?)\]'"*_])/g;
+  function mdInline(text, parent) {
+    let last = 0;
+    for (const m of text.matchAll(INLINE)) {
+      if (m.index > last) parent.append(text.slice(last, m.index));
+      if (m[1]) parent.append(h('code', { text: m[2] }));
+      else if (m[3] || m[4]) mdInline(m[3] || m[4], parent.appendChild(h('strong')));
+      else if (m[5] || m[6]) mdInline(m[5] || m[6], parent.appendChild(h('em')));
+      else if (m[7]) {
+        if (SAFE_URL.test(m[8])) mdInline(m[7], parent.appendChild(h('a', { href: m[8], target: '_blank', rel: 'noopener noreferrer' })));
+        else parent.append(m[0]);
+      } else if (m[9]) parent.append(h('a', { href: m[9], target: '_blank', rel: 'noopener noreferrer', text: m[9] }));
+      last = m.index + m[0].length;
+    }
+    if (last < text.length) parent.append(text.slice(last));
+    return parent;
+  }
+  const LIST_UL = /^\s{0,3}[-*+]\s+/;
+  const LIST_OL = /^\s{0,3}\d{1,9}[.)]\s+/;
+  const BLOCK_START = /^\s{0,3}(#{1,6}\s|[-*+]\s|\d{1,9}[.)]\s|>)/;
+  function mdBlocks(src) {
+    const out = [];
+    const lines = String(src || '').replace(/\r\n?/g, '\n').split('\n');
+    let i = 0;
+    const paragraph = (rows, el) => {
+      rows.forEach((ln, k) => {
+        const hard = / {2,}$|\\$/.test(ln);
+        mdInline(ln.replace(/ {2,}$|\\$/, '').trim(), el);
+        if (k < rows.length - 1) el.append(hard ? h('br') : ' ');
+      });
+      return el;
+    };
+    while (i < lines.length) {
+      const line = lines[i];
+      if (!line.trim()) { i++; continue; }
+      const head = line.match(/^\s{0,3}(#{1,6})\s+(.*?)(?:\s+#+)?\s*$/);
+      if (head) { out.push(mdInline(head[2], h('h' + head[1].length))); i++; continue; }
+      if (/^\s{0,3}([-*_])(?:\s*\1){2,}\s*$/.test(line)) { out.push(h('hr')); i++; continue; }
+      const listRe = LIST_UL.test(line) ? LIST_UL : LIST_OL.test(line) ? LIST_OL : null;
+      if (listRe) {
+        const list = h(listRe === LIST_UL ? 'ul' : 'ol');
+        while (i < lines.length && listRe.test(lines[i])) { list.append(mdInline(lines[i].replace(listRe, ''), h('li'))); i++; }
+        out.push(list);
+        continue;
+      }
+      if (/^\s{0,3}>/.test(lines[i])) {
+        const rows = [];
+        while (i < lines.length && /^\s{0,3}>/.test(lines[i])) { rows.push(lines[i].replace(/^\s{0,3}>\s?/, '')); i++; }
+        out.push(h('blockquote', {}, paragraph(rows.filter((r) => r.trim()), h('p'))));
+        continue;
+      }
+      const rows = [];
+      while (i < lines.length && lines[i].trim() && !(rows.length && BLOCK_START.test(lines[i]))) { rows.push(lines[i]); i++; }
+      out.push(paragraph(rows, h('p')));
+    }
+    return out;
+  }
+
+  // ------------------------------------------------------------------ your own song (mixtape)
+  const fmtSecs = (t) => `${Math.floor(t / 60)}:${String(Math.round(t % 60)).padStart(2, '0')}`;
+  function songSection(w) {
+    return h('fieldset', { class: 'logos song' },
+      h('legend', { class: 'label', text: 'Your song' }),
+      h('p', { class: 'hint', id: `sgh-${w.uid}`, text: 'mp3, m4a, ogg or wav, up to 10 MB, and only a song you have the rights to. Until you add one, the preview plays a demo song and “Generate my profile” leaves this mixtape out.' }),
+      h('div', { class: 'song-row', id: `sg-${w.uid}` }),
+      h('p', { class: 'hint logo-msg song-msg', role: 'status' }));
+  }
+  function paintSong(li, w) {
+    const box = li.querySelector('.song-row');
+    if (!box) return;
+    const s = songs.get(w.opts.song);
+    const sig = s ? `${w.opts.song}|${s.secs}` : '-';
+    if (box.dataset.sig === sig) return;
+    box.dataset.sig = sig;
+    const hadFocus = box.contains(document.activeElement);
+    box.replaceChildren(
+      s ? h('p', { class: 'song-now' }, h('span', { class: 'name', text: s.name }), h('span', { class: 'tag', text: `${fmtSecs(s.secs)} · ${w.opts.song}` })) : '',
+      h('div', { class: 'logo-actions' },
+        h('label', { class: 'btn file' + (s ? '' : ' solid') },
+          h('span', { 'aria-hidden': 'true', text: s ? 'Replace song' : 'Upload your song' }),
+          h('input', { type: 'file', accept: '.mp3,.m4a,.ogg,.wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/ogg,audio/wav,audio/x-wav',
+            'data-song-act': 'upload', 'aria-label': s ? 'Replace your song' : 'Upload your song', 'aria-describedby': `sgh-${w.uid}` })),
+        s ? h('button', { class: 'btn', type: 'button', 'data-song-act': 'remove', 'aria-label': 'Remove your song', text: 'Remove' }) : ''));
+    if (hadFocus) box.querySelector('input[type=file]').focus();
+  }
+  function audioLength(file) {
+    return new Promise((resolve) => {
+      const a = new Audio();
+      const url = URL.createObjectURL(file);
+      const done = (v) => { URL.revokeObjectURL(url); resolve(v); };
+      a.preload = 'metadata';
+      a.addEventListener('loadedmetadata', () => done(Number.isFinite(a.duration) ? a.duration : 0), { once: true });
+      a.addEventListener('error', () => done(0), { once: true });
+      setTimeout(() => done(0), 10000);
+      a.src = url;
+    });
+  }
+  function dropSong(path) {
+    if (!songs.has(path) || state.widgets.some((w) => w.kind === 'mixtape' && w.opts.song === path)) return;
+    songs.delete(path);
+    worker.postMessage({ type: 'song', path, bytes: null, secs: 0 });
+  }
+  function setField(li, key, value) {
+    const el = li.querySelector(`[data-key="${key}"]`);
+    if (el) el.value = value;
+  }
+  async function onSongFile(el) {
+    const li = el.closest('[data-uid]');
+    const w = state.widgets.find((x) => x.uid === li.dataset.uid);
+    const f = el.files && el.files[0];
+    const say = (t) => { li.querySelector('.song-msg').textContent = t; };
+    if (!w || !f) return;
+    const ext = (f.name.match(/\.(mp3|m4a|ogg|wav)$/i) || [])[1];
+    el.value = '';
+    if (!ext) { say(`“${f.name}” isn’t an mp3, m4a, ogg or wav file.`); return; }
+    if (f.size > SONG_MAX) { say(`“${f.name}” is ${(f.size / 1048576).toFixed(1)} MB; a song can be at most 10 MB.`); return; }
+    say(`Reading “${f.name}”…`);
+    const secs = await audioLength(f);
+    if (!secs) { say(`Couldn’t play “${f.name}”. Is it an audio file your browser can play?`); return; }
+    const bytes = new Uint8Array(await f.arrayBuffer());
+    const cur = String(w.opts.song || '').trim();
+    const path = cur && cur !== START.mixtape.song && SONG_PATH_RE.test(cur) && !cur.split('/').includes('..') &&
+      cur.toLowerCase().endsWith('.' + ext.toLowerCase())
+      ? cur : `docs/music/${safeName(f.name.replace(/\.[^.]+$/, ''))}.${ext.toLowerCase()}`;
+    songs.set(path, { secs: Math.round(secs * 100) / 100, name: f.name, size: f.size });
+    worker.postMessage({ type: 'song', path, bytes, secs: songs.get(path).secs }, [bytes.buffer]);
+    const old = w.opts.song;
+    w.opts.song = path;
+    w.opts.chords = 'off';                  // no numpy here; the Action can work chords out later
+    dropSong(old);
+    setField(li, 'song', path);
+    setField(li, 'chords', 'off');
+    say(`Using “${f.name}” (${fmtSecs(secs)}), saved as ${path}. Chords are off for now; set chords to auto later and the GitHub Action works them out.`);
+    paintCard(w);
+    schedule(30);
+  }
+  $('#widgets').addEventListener('change', (e) => {
+    if (e.target.dataset && e.target.dataset.songAct === 'upload') onSongFile(e.target);
+  });
+  $('#widgets').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-song-act="remove"]');
+    if (!b) return;
+    const li = b.closest('[data-uid]');
+    const w = state.widgets.find((x) => x.uid === li.dataset.uid);
+    const old = w.opts.song;
+    w.opts.song = START.mixtape.song;
+    dropSong(old);
+    setField(li, 'song', w.opts.song);
+    li.querySelector('.song-msg').textContent = 'Removed your song; the preview plays the demo song again.';
+    paintCard(w);
+    schedule(30);
+  });
+
+  // ------------------------------------------------------------------ generate my profile
+  const genSay = (t) => { $('#gen-status').textContent = t; };
+  $('#generate').addEventListener('click', () => {
+    const typed = $('#user').value.trim();
+    if (!USER_RE.test(typed) || typed.toLowerCase() === 'octocat') {
+      genSay('First put your own GitHub username in “GitHub username” at the top. It decides where your profile goes.');
+      $('#user').setAttribute('aria-invalid', 'true');
+      $('#user').focus();
+      return;
+    }
+    if (!workerReady) { genSay('The renderer is still loading; try again in a moment.'); return; }
+    const skipped = state.widgets.filter((w) => w.kind === 'mixtape' && !songs.has(w.opts.song));
+    const list = state.widgets.filter((w) => !skipped.includes(w));
+    lastGen = { user: state.user, skipped, mixtape: list.some((w) => w.kind === 'mixtape') };
+    $('#generate').disabled = true;
+    genSay('Drawing your profile with Pernik…');
+    worker.postMessage({ type: 'zip', profile: true, toml: tomlText(list, true), readme: readmeText(list), user: state.user });
+  });
+  function onProfile(m) {
+    $('#generate').disabled = false;
+    if (m.error) { genSay(`Something went wrong while drawing: ${m.error}`); return; }
+    const u = lastGen.user;
+    const name = `${u}-profile.zip`;
+    const url = URL.createObjectURL(new Blob([m.bytes], { type: 'application/zip' }));
+    const a = h('a', { href: url, download: name });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    const repo = `https://github.com/${u}/${u}`;
+    $('#step-create').href = `https://github.com/new?name=${encodeURIComponent(u)}&visibility=public&description=${encodeURIComponent('My GitHub profile')}`;
+    $('#step-create-note').textContent = `Skip this if you already have a repo called ${u}. It must be public and named exactly like your username.`;
+    $('#step-upload').href = `${repo}/upload/main`;
+    $('#step-zipname').textContent = name;
+    $('#step-done').href = `https://github.com/${u}`;
+    $('#step-done').firstChild.nodeValue = `github.com/${u}`;
+    $('#step-workflow').href = `${repo}/new/main?filename=${encodeURIComponent('.github/workflows/pernik.yml')}&value=${encodeURIComponent(WORKFLOW)}`;
+    $('#step-actions').href = `${repo}/settings/actions`;
+    $('#step-pages').hidden = !lastGen.mixtape;
+    $('#step-pages-link').href = `${repo}/settings/pages`;
+    const p = (m.info && m.info.problems) || [];
+    const notes = [];
+    if (lastGen.skipped.length) notes.push(`Left out: ${lastGen.skipped.map((w) => `mixtape “${w.id}”`).join(', ')} (add your own song to include it).`);
+    if (p.length) notes.push(`Pernik found ${p.length} problem${p.length > 1 ? 's' : ''}: ${p.join('; ')}`);
+    $('#steps-summary').textContent = `${name} is in your downloads.` + (notes.length ? ' ' + notes.join(' ') : '');
+    $('#steps').hidden = false;
+    genSay(`Downloaded ${name}. Next: put it on GitHub, steps below.`);
+    $('#steps-title').focus();
+  }
+
   // ------------------------------------------------------------------ outputs
   const tomlKey = (k) => (ID_RE.test(k) ? k : JSON.stringify(String(k)));
   function tomlValue(v) {
@@ -777,35 +1032,41 @@ jobs:
     if (typeof v === 'number') return Number.isFinite(v) ? String(v) : '0';
     return JSON.stringify(String(v)).replace(/\u007f/g, '\\u007F');
   }
-  function tomlText() {
+  function tomlText(list = state.widgets, profile = false) {
     const out = [
-      '# Pernik settings, made in the playground. Every option: python3 -m pernik list',
+      profile ? `# Edit this to change your widgets; see ${REPO_URL}`
+        : '# Pernik settings, made in the playground. Every option: python3 -m pernik list',
       'schema = 1',
       `theme = ${tomlValue(state.theme)}`,
       'output = "pernik"',
       `# user = ${tomlValue(state.user)}   # found automatically in the GitHub Action`,
     ];
-    for (const w of state.widgets) {
+    for (const w of list) {
+      if (w.kind === 'text') continue;            // your words live in README.md, not here
       out.push('');
-      if (w.kind === 'mixtape') out.push('# put your own song in the repo and point song at it (only songs you have the rights to)');
+      if (w.kind === 'mixtape' && !(profile && songs.has(w.opts.song))) out.push('# put your own song in the repo and point song at it (only songs you have the rights to)');
       if (w.kind === 'stack' && Object.keys(w.opts.logos || {}).length) out.push('# commit your logo files at these paths (the playground’s zip has them)');
       out.push('[[widget]]', `id = ${tomlValue(w.id)}`, `kind = ${tomlValue(w.kind)}`);
       for (const [k, v] of Object.entries(clean(w))) out.push(`${k} = ${tomlValue(v)}`);
     }
     return out.join('\n') + '\n';
   }
-  function readmeText() {
+  function readmeText(list = state.widgets) {
     const parts = [];
-    state.widgets.forEach((w, i) => {
-      parts.push(`<!-- pernik:${w.id} -->\n<!-- /pernik:${w.id} -->`);
-      if (i === 0) parts.push(WORDS);
-    });
+    for (const w of list) {
+      if (w.kind === 'text') { if (String(w.opts.md || '').trim()) parts.push(String(w.opts.md).trim()); }
+      else parts.push(`<!-- pernik:${w.id} -->\n<!-- /pernik:${w.id} -->`);
+    }
     return parts.join('\n\n') + '\n';
   }
   function refreshOutputs() {
     $('#out-toml').textContent = tomlText();
     $('#out-readme').textContent = readmeText();
     $('#out-workflow').textContent = WORKFLOW;
+    const noSong = state.widgets.filter((w) => w.kind === 'mixtape' && !songs.has(w.opts.song));
+    $('#gen-note').hidden = !noSong.length;
+    $('#gen-note').textContent = noSong.length
+      ? `Add your own song to use mixtape: without one, “Generate my profile” leaves ${noSong.map((w) => `“${w.id}”`).join(', ')} out.` : '';
     const used = [...referenced()].filter((p) => files.has(p));
     $('#logo-note').hidden = !used.length;
     $('#logo-note').textContent = used.length
@@ -917,8 +1178,11 @@ jobs:
   }
   function shareNote(dropped) {
     const n = $('#share-note');
-    n.hidden = !dropped;
-    n.textContent = dropped ? 'Uploaded logos aren’t included in share links (too big); the link keeps the rest.' : '';
+    const notes = [];
+    if (dropped) notes.push('Uploaded logos aren’t included in share links (too big); the link keeps the rest.');
+    if (state.widgets.some((w) => w.kind === 'mixtape' && songs.has(w.opts.song))) notes.push('Uploaded songs are never included in share links.');
+    n.hidden = !notes.length;
+    n.textContent = notes.join(' ');
   }
   async function decodeState(hash) {
     const m = hash.replace(/^#/, '').match(/^([zj])=([A-Za-z0-9_-]+)$/);
@@ -938,7 +1202,7 @@ jobs:
     const taken = [];
     const widgets = [];
     for (const [id, kind, opts] of d.w.slice(0, 40)) {
-      if (!specs[kind]) continue;
+      if (!specs[kind] && kind !== 'text') continue;
       const wid = ID_RE.test(String(id)) && !taken.includes(String(id)) ? String(id) : freeId(kind, taken);
       taken.push(wid);
       const w = newWidget(kind, wid);
@@ -999,11 +1263,12 @@ jobs:
       theme: 'komik',
       widgets: [
         newWidget('hero', 'hello'),
+        Object.assign(newWidget('text', 'text', { md: defaultText('octocat') }), { auto: true }),
         newWidget('divider', 'line', { style: 'kawung' }),
         newWidget('heading', 'stack-title'),
         newWidget('stack', 'stack'),
         newWidget('footer', 'bye'),
-      ].filter((w) => specs[w.kind]),
+      ].filter((w) => specs[w.kind] || w.kind === 'text'),
     };
   }
   function loadState(s) {

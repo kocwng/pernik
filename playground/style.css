@@ -190,6 +190,7 @@ legend { padding: 0; margin-bottom: 8px; }
   border-radius: 2px;
   cursor: pointer;
 }
+a.btn { text-decoration: none; }
 .btn:hover { background: var(--tint); }
 .btn.solid { background: var(--solid); color: var(--on-solid); }
 .btn.solid:hover { background: var(--spot); color: var(--ink); }
@@ -254,7 +255,7 @@ legend { padding: 0; margin-bottom: 8px; }
 .wtoggle:hover .wkind { text-decoration: underline; text-decoration-color: var(--spot); text-decoration-thickness: 2px; }
 .wnum {
   flex: none; width: 24px; height: 24px; display: grid; place-items: center;
-  border-radius: 50%; background: var(--spot); color: var(--ink);
+  border-radius: 50%; background: var(--spot); color: #1C1520;
   border: var(--hair) solid var(--ink); font: 700 12px/1 var(--mono);
 }
 .wkind { flex: none; white-space: nowrap; font-family: var(--label); font-weight: 900; text-transform: uppercase; letter-spacing: .04em; font-size: 13px; }
@@ -316,6 +317,46 @@ legend { padding: 0; margin-bottom: 8px; }
 .note { margin: 0 0 16px; padding: 8px 12px; border-left: var(--frame) solid var(--spot);
   background: color-mix(in srgb, var(--tint) 45%, var(--paper)); font-size: 14px; }
 
+/* generate my profile */
+.generate { margin: 0 0 24px; padding: 16px; border: var(--line) solid var(--ink); border-radius: 6px;
+  background: radial-gradient(circle, var(--tint) 1.6px, transparent 2px) 0 0 / 8px 8px, var(--paper); }
+.gen-lead { margin: 0 0 16px; font-size: 16px; }
+.btn.big { min-height: 48px; padding: 12px 24px; font-size: 15px; box-shadow: 4px 4px 0 var(--spot); }
+.btn.big:active:not(:disabled) { box-shadow: 2px 2px 0 var(--spot); transform: translate(2px, 2px); }
+.gen-status:empty { display: none; }
+.gen-status { margin-top: 8px; color: var(--ink); }
+.steps { margin: 0 0 24px; padding: 16px; border: var(--frame) solid var(--ink); border-radius: 6px; }
+.steps h3:focus { outline: 3px solid var(--spot); outline-offset: 3px; }
+.steps-list { list-style: none; margin: 16px 0; padding: 0; display: grid; gap: 16px; }
+.steps-list > li { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 8px 12px; align-items: start; }
+.steps-list p { margin: 0 0 8px; }
+.badge { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%;
+  background: var(--spot); color: #1C1520; border: var(--line) solid var(--ink); font: 700 14px/1 var(--mono); }
+.warn { padding: 8px 12px; border: var(--line) dashed var(--ink); border-radius: 2px; background: var(--tint); }
+.optional { margin-top: 16px; padding-top: 16px; border-top: var(--hair) dashed var(--ink); }
+.optional h4 { margin: 0 0 8px; }
+.optional p { margin: 0 0 8px; }
+.plain { margin: 0; padding-left: 24px; display: grid; gap: 8px; }
+.song-now { margin: 0 0 8px; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
+.song-now .name { font: 700 14px/1.4 var(--mono); overflow-wrap: anywhere; }
+.song-now .tag { font: 12px/1.4 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+
+/* your words in the README preview, the way GitHub shows markdown */
+.readme .w.md { margin: 0 0 16px; font-size: 16px; line-height: 1.5; overflow-wrap: anywhere; }
+.readme .w.md:empty { display: none; }
+.readme .w.md > :first-child { margin-top: 0; }
+.readme .w.md > :last-child { margin-bottom: 0; }
+.readme .w.md p, .readme .w.md ul, .readme .w.md ol, .readme .w.md blockquote { margin: 0 0 16px; }
+.readme .w.md ul, .readme .w.md ol { padding-left: 2em; }
+.readme .w.md h1, .readme .w.md h2 { padding-bottom: .3em; border-bottom: 1px solid currentColor; border-bottom-color: color-mix(in srgb, currentColor 20%, transparent); }
+.readme .w.md h1, .readme .w.md h2, .readme .w.md h3, .readme .w.md h4, .readme .w.md h5, .readme .w.md h6 { margin: 24px 0 16px; line-height: 1.25; font-weight: 600; }
+.readme .w.md h1 { font-size: 2em; } .readme .w.md h2 { font-size: 1.5em; } .readme .w.md h3 { font-size: 1.25em; }
+.readme .w.md code { padding: .2em .4em; border-radius: 6px; font: 85% var(--mono); background: color-mix(in srgb, currentColor 12%, transparent); }
+.readme .w.md blockquote { padding: 0 1em; border-left: .25em solid color-mix(in srgb, currentColor 30%, transparent); opacity: .85; }
+.readme .w.md hr { height: .25em; border: 0; background: color-mix(in srgb, currentColor 18%, transparent); margin: 24px 0; }
+.gh-light .w.md a { color: #0969da; }
+.gh-dark .w.md a { color: #4493f8; }
+
 /* ---------------------------------------------------------------- preview */
 .preview { container-type: inline-size; }
 .preview-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 16px; }
@@ -345,7 +386,6 @@ legend { padding: 0; margin-bottom: 8px; }
 .readme .w { position: relative; margin: 0 0 16px; }
 .readme .w img { display: block; width: 100%; height: auto; }
 .readme .w a { display: block; }
-.readme p.words { margin: 0 0 16px; font-size: 16px; line-height: 1.5; }
 .readme .busy {
   position: absolute; top: 8px; right: 8px; padding: 2px 8px; border-radius: 2px;
   font: 11px/1.5 var(--mono); background: #1C1520; color: #FAF3F8;

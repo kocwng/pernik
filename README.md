@@ -7,7 +7,7 @@
 - **Yours.** Patterns are generated from your username, so your batik doesn't look like anyone else's. Themes change every colour at once.
 - **README-safe.** No scripts and no outside files, just CSS animation. `pernik check` makes sure of it.
 
-**Try it in your browser:** [kocwng.github.io/pernik](https://kocwng.github.io/pernik/) opens the playground, where Pernik runs right in the page. Nothing to install.
+**Try it in your browser:** [kocwng.github.io/pernik](https://kocwng.github.io/pernik/) opens the playground, where Pernik runs right in the page. Nothing to install. When you like what you see, **Generate my profile** gives you a zip with a finished README and its pictures: upload it to the repo named after your username and you're done, no Actions needed.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/example-dark.png" />

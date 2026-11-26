@@ -5,6 +5,8 @@
                                            {type:'ready', version, python, pyodide}
    {type:'demo', secs}                     the demo song's length (measured by the page)
    {type:'file', path, text|null}          an uploaded logo (assets/logos/*.svg), or remove it
+   {type:'song', path, bytes|null, secs}   the user's own song for a mixtape, or remove it
+   {type:'zip', ..., profile: true}        the "Generate my profile" zip
    {type:'render', uid, key, payload}      {type:'rendered', uid, key, result}
    {type:'zip', toml, readme, user}        {type:'zip', bytes, info} or {type:'zip', error}
                                            {type:'fatal', text}  if loading failed
@@ -110,16 +112,18 @@ async function handle(m) {
   if (m.type === 'render') {
     const result = JSON.parse(bridge.render(JSON.stringify(m.payload)));
     post({ type: 'rendered', uid: m.uid, key: m.key, result });
+  } else if (m.type === 'song') {
+    bridge.put_song(m.path, m.bytes ? m.bytes : null, m.secs || 0);
   } else if (m.type === 'file') {
     bridge.put_file(m.path, m.text === undefined ? null : m.text);
   } else if (m.type === 'demo') {
     demoSecs = m.secs || 0;
     if (demo) bridge.set_demo(demo, demoSecs);
   } else if (m.type === 'zip') {
-    const proxy = bridge.make_zip(m.toml, m.readme, m.user);
+    const proxy = bridge.make_zip(m.toml, m.readme, m.user, !!m.profile);
     const bytes = proxy.toJs();
     proxy.destroy();
     const info = JSON.parse(bridge.last_build());
-    post({ type: 'zip', bytes, info }, [bytes.buffer]);
+    post({ type: 'zip', bytes, info, profile: !!m.profile }, [bytes.buffer]);
   }
 }
