@@ -90,10 +90,15 @@ class IconNameTests(unittest.TestCase):
         self.assertEqual(find_icon('Node.js', self.IDX), ('nodedotjs', ''))
         self.assertEqual(find_icon('golang', self.IDX), ('go', ''))
         self.assertEqual(find_icon('Spring Boot', self.IDX), ('springboot', ''))
-        slug, hint = find_icon('spark', self.IDX)
+        self.assertEqual(find_icon('spark', self.IDX), ('apachespark', ''))   # Spark AR is "spark ar"
+        slug, hint = find_icon('aws bedrock', self.IDX)
         self.assertIsNone(slug)
-        self.assertIn('apachespark', hint)
         self.assertEqual(find_icon('aws', self.IDX), (None, ''))
+        idx = dict(self.IDX, rootsbedrock=['Roots Bedrock', '525DDC'], openaigym=['OpenAI Gym', '0081A5'],
+                   googlegemini=['Google Gemini', '8E75B2'])
+        self.assertIsNone(find_icon('bedrock', idx)[0])          # only a suggestion, not a wrong logo
+        self.assertIsNone(find_icon('openai', idx)[0])
+        self.assertEqual(find_icon('gemini', idx), ('googlegemini', ''))
 
     def test_custom_logo_file(self):
         from pernik.widgets.stack import custom_logo

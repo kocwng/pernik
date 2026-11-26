@@ -29,6 +29,8 @@ ALIASES = {  # friendly names people type -> Simple Icons slugs
     'vue': 'vuedotjs', 'next': 'nextdotjs', 'nextjs': 'nextdotjs', 'c++': 'cplusplus', 'cpp': 'cplusplus',
     'c#': 'csharp', 'html': 'html5', 'css': 'css', 'tailwind': 'tailwindcss', 'mongo': 'mongodb',
 }
+VENDORS = {'apache', 'google', 'amazon', 'aws', 'microsoft', 'ibm', 'github', 'jetbrains', 'adobe',
+           'oracle', 'meta', 'facebook', 'mozilla', 'the'}
 SAFE_D = re.compile(r'[MmLlHhVvCcSsQqTtAaZz0-9eE.,\s+-]+')
 _memo = {}
 
@@ -126,11 +128,16 @@ def find_icon(raw, idx):
         return by_title[0], ''
     words = [w for w in re.split(r'[^a-z0-9]+', key) if w]
     if words:
+        # "kafka" -> Apache Kafka, "gemini" -> Google Gemini: the title is the word plus a maker's name.
+        # Anything looser ("bedrock" -> Roots Bedrock) is only offered as a suggestion.
+        exact = [s for s, v in idx.items()
+                 if [w for w in re.split(r'[^a-z0-9]+', v[0].lower()) if w and w not in VENDORS]
+                 == [w for w in words if w not in VENDORS]]
+        if len(exact) == 1:
+            return exact[0], ''
         hits = [s for s, v in idx.items()
                 if all(w in re.split(r'[^a-z0-9]+', v[0].lower()) for w in words)]
-        if len(hits) == 1:
-            return hits[0], ''
-        if 1 < len(hits) <= 4:
+        if 1 <= len(hits) <= 4:
             return None, 'did you mean ' + ' or '.join(f'"{h}"' for h in sorted(hits, key=len)) + '?'
     close = difflib.get_close_matches(slug, list(idx), n=3, cutoff=.75)
     return None, ('did you mean ' + ' or '.join(f'"{c}"' for c in close) + '?') if close else ''

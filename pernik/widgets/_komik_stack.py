@@ -111,9 +111,12 @@ def _panel(k, rng, i, x, y, w, title, d, numbered, box=(0, 0, 24, 24)):
                    f'fill="{k.ink}" {halo} stroke-width="{2 * K.MARGIN / s:.2f}"/>')
     else:
         # no logo: a short name (AWS, GCP) is printed whole, a longer one as its first letter
-        word = re.sub(r'[^A-Za-z0-9]', '', title)
-        mono = word.upper() if 1 < len(word) <= 4 else (word[:1].upper() or '?')
-        fs = 72 if len(mono) == 1 else {2: 56, 3: 44, 4: 34}[len(mono)]
+        # no logo: print the name itself as big as the panel allows (AWS, GORM, BEDROCK, ANTIGRAVITY),
+        # and fall back to its first letter only when even that would be too small to read
+        word = re.sub(r'[^A-Za-z0-9 ]', '', title).strip().upper()
+        fs = min(56.0, (w - 48) / (max(1, len(word)) * .8))
+        mono = word if fs >= 18 else (word[:1] or '?')
+        fs = 72 if len(mono) == 1 else max(18, int(fs))
         out.append(f'<text x="{n(cx)}" y="{n(cy + fs * .36)}" font-size="{fs}" text-anchor="middle" class="kl" '
                    f'fill="{k.ink}" {halo} stroke-width="{2 * K.MARGIN}">{K.esc(mono)}</text>')
     if numbered:
