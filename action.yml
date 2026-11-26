@@ -1,9 +1,9 @@
-name: Pernik
-description: Build playful, theme-aware widgets for your GitHub profile README from pernik.toml and commit them.
+name: Pernik README Widgets
+description: Comic-panel widgets for your GitHub profile README, from one pernik.toml. Light and dark, no server.
 author: kocwng
 branding:
-  icon: music
-  color: orange
+  icon: layout
+  color: purple
 
 inputs:
   config:
