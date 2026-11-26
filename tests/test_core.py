@@ -104,7 +104,8 @@ class IconNameTests(unittest.TestCase):
         from pernik.widgets.stack import custom_logo
         with tempfile.TemporaryDirectory() as d:
             write(d, 'assets/x.svg', '<svg viewBox="0 0 100 50"><path d="M0 0h100v50z"/></svg>')
-            dpath, box, color = custom_logo(d, {'file': 'assets/x.svg', 'color': '#FF9900'}, print)
+            dpath, box, color, rule = custom_logo(d, {'file': 'assets/x.svg', 'color': '#FF9900'}, print)
+            self.assertIsNone(rule)
             self.assertEqual(box, (0, 0, 100, 50))
             self.assertEqual(color, '#FF9900')
             self.assertIsNone(custom_logo(d, '../outside.svg', lambda *a: None))

@@ -180,7 +180,9 @@ def custom_logo(root, spec, say):
         say(f'logo file "{rel}": only its <path> shapes are drawn; convert other shapes to paths')
     if color is not None and not re.fullmatch(r'#[0-9a-fA-F]{6}', str(color)):
         color = None
-    return ' '.join(ds), box, color
+    # logos with holes (eyes, rings) are drawn with the even-odd rule when the file says so
+    rule = 'evenodd' if re.search(r'fill-rule\s*[:=]\s*["\']?evenodd', raw) else None
+    return ' '.join(ds), box, color, rule
 
 
 def logo_transform(x, y, size, box=(0, 0, 24, 24)):
@@ -192,12 +194,13 @@ def logo_transform(x, y, size, box=(0, 0, 24, 24)):
 
 
 def resolve(raw, ctx, idx, logos, say):
-    """(title, d, box, colour hex or None) for one entry in `icons`; d is None when no logo."""
+    """(title, d, box, colour hex or None, fill rule or None) for one entry in `icons`;
+    d is None when there's no logo."""
     if raw in logos or raw.lower() in logos:
         got = custom_logo(ctx.root, logos.get(raw, logos.get(raw.lower())), say)
         if got:
-            d, box, color = got
-            return raw, d, box, color
+            d, box, color, rule = got
+            return raw, d, box, color, rule
     slug, hint = find_icon(raw, idx)
     info = idx.get(slug) if slug else None
     d = _icon_path(ctx.root, slug, say) if slug and (info or not idx) and re.fullmatch(r'[a-z0-9]+', slug) else None
@@ -206,7 +209,7 @@ def resolve(raw, ctx, idx, logos, say):
         say(f'"{raw}" {missing}' + (f' ({hint})' if hint else '')
             + f'. To use your own logo: logos = {{ {_toml_key(raw)} = "path/to/logo.svg" }}')
     title = info[0] if (info and d) else raw
-    return title, d, (0, 0, 24, 24), ('#' + info[1]) if info else None
+    return title, d, (0, 0, 24, 24), ('#' + info[1]) if info else None, None
 
 
 def _toml_key(k):
@@ -242,17 +245,17 @@ def stack(opts, ctx):
     idx = _index(ctx.root, say) if icons else {}
     logos = opts.get('logos') or {}
     logos = logos if isinstance(logos, dict) else {}
-    tiles = []   # (label, path d or None, logo colour, viewBox)
+    tiles = []   # (label, path d or None, logo colour, viewBox, fill rule)
     for raw in icons:
-        title, d, box, col = resolve(raw, ctx, idx, logos, say)
+        title, d, box, col, rule = resolve(raw, ctx, idx, logos, say)
         if d is None:
-            tiles.append((raw, None, None, box))
+            tiles.append((raw, None, None, box, None))
             continue
         col = col or s.ink
         # brand colour, or ink when it would melt into the cream tile (pale yellows, light greens)
         if contrast(col, s.cream) < 1.8:
             col = s.ink
-        tiles.append((title, d, col, box))
+        tiles.append((title, d, col, box, rule))
 
     n = len(tiles)
     gap = round(size * .32)
@@ -276,7 +279,7 @@ def stack(opts, ctx):
 
     body = []
     ew = pal.outline_w
-    for i, (label, d, col, box) in enumerate(tiles):
+    for i, (label, d, col, box, rule) in enumerate(tiles):
         row, c = divmod(i, cols)
         in_row = min(cols, n - row * cols)
         x0 = (W - in_row * pitch + gap) / 2
@@ -295,7 +298,8 @@ def stack(opts, ctx):
             ls = size * .5
             ly = -th / 2 + (size - ls) / 2 + (size * .04 if labels else 0)
             tf, _ = logo_transform(-ls / 2, ly, ls, box)
-            parts.append(f'<path transform="{tf}" d="{d}" fill="{col}"/>')
+            fr = f' fill-rule="{rule}"' if rule else ''
+            parts.append(f'<path transform="{tf}" d="{d}" fill="{col}"{fr}/>')
             if labels:
                 fs = fit(label, size - 18, lfs, 7)
                 parts.append(f'<text class="r" x="0" y="{num(th / 2 - size * .17)}" font-size="{num(fs)}" '

@@ -49,10 +49,10 @@ def render(opts, ctx):
     idx = _index(ctx.root, say) if icons else {}
     logos = opts.get('logos') or {}
     logos = logos if isinstance(logos, dict) else {}
-    items = []                       # (title, path d or None, viewBox)
+    items = []                       # (title, path d or None, viewBox, fill rule)
     for raw in icons:
-        title, d, box, _ = resolve(raw, ctx, idx, logos, say)
-        items.append((title, d, box))
+        title, d, box, _, rule = resolve(raw, ctx, idx, logos, say)
+        items.append((title, d, box, rule))
 
     count = len(items)
     cols = _columns(count, want)
@@ -69,12 +69,12 @@ def render(opts, ctx):
     for r in range(rows):
         row = items[r * cols:(r + 1) * cols]
         m = len(row)                 # a short last row stretches, like a manga page
-        for j, (title, d, box) in enumerate(row):
+        for j, (title, d, box, rule) in enumerate(row):
             i = r * cols + j
             x = PAD + round(j * (inner + GUT) / m)
             w = PAD + round((j + 1) * (inner + GUT) / m) - GUT - x
             y = PAD + r * (PANEL_H + GUT)
-            panels.append(_panel(k, rng, i, x, y, w, title, d, numbered, box))
+            panels.append(_panel(k, rng, i, x, y, w, title, d, numbered, box, rule))
     if not items:
         panels.append(f'<text x="{W / 2:g}" y="{h / 2 + 5:g}" font-size="14" text-anchor="middle" class="km" '
                       f'fill="{k.ink}">no tools listed yet</text>')
@@ -90,7 +90,7 @@ def render(opts, ctx):
     return Out(svg=svg, alt=title)
 
 
-def _panel(k, rng, i, x, y, w, title, d, numbered, box=(0, 0, 24, 24)):
+def _panel(k, rng, i, x, y, w, title, d, numbered, box=(0, 0, 24, 24), rule=None):
     cx = x + w / 2
     cy = y + BAR + (PANEL_H - BAR) / 2
     out = []                                                       # the card's paper shows through
@@ -107,8 +107,9 @@ def _panel(k, rng, i, x, y, w, title, d, numbered, box=(0, 0, 24, 24)):
     if d:
         tf, s = logo_transform(cx - LOGO / 2, cy - LOGO / 2, LOGO, box)
         path = compact_path(d) if box == (0, 0, 24, 24) else d
+        fr = f' fill-rule="{rule}"' if rule else ''
         out.append(f'<path transform="{tf}" d="{path}" '
-                   f'fill="{k.ink}" {halo} stroke-width="{2 * K.MARGIN / s:.2f}"/>')
+                   f'fill="{k.ink}"{fr} {halo} stroke-width="{2 * K.MARGIN / s:.2f}"/>')
     else:
         # no logo: a short name (AWS, GCP) is printed whole, a longer one as its first letter
         # no logo: print the name itself as big as the panel allows (AWS, GORM, BEDROCK, ANTIGRAVITY),
