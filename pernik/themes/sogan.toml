@@ -1,0 +1,23 @@
+# Earthy batik colours: sogan brown, indigo, cream and a touch of gold.
+extends = "pernik"
+name = "sogan"
+accents = ["#8B5A2B", "#2E4A7D", "#C9962E", "#A0522D", "#5B7553", "#6B3E26"]
+
+[colors]
+jeruk = "#C9962E"
+pink = "#A0522D"
+kuning = "#E0B95B"
+mint = "#5B7553"
+langit = "#2E4A7D"
+anggur = "#6B3E26"
+cream = "#F6ECD9"
+ink = "#2A1E14"
+
+[light]
+outline = "#F6ECD9"
+shadow = "#2A1E14"
+text = "#2A1E14"
+
+[dark]
+outline = "#F6ECD9"
+text = "#F6ECD9"

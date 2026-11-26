@@ -1,0 +1,7 @@
+__pycache__/
+*.egg-info/
+build/
+dist/
+.pernik-cache/
+/examples/profile/pernik/preview.html
+*.mp4

@@ -1,0 +1,20 @@
+# Softer colours with thinner outlines.
+extends = "pernik"
+name = "pastel"
+accents = ["#FFB38A", "#FF9CC8", "#FFE28A", "#8FE3BE", "#9ADCF5", "#B3A1FF"]
+
+[colors]
+jeruk = "#FFB38A"
+pink = "#FF9CC8"
+kuning = "#FFE28A"
+mint = "#8FE3BE"
+langit = "#9ADCF5"
+anggur = "#B3A1FF"
+
+[sticker]
+outline = 4
+shadow_dx = 3
+shadow_dy = 4
+
+[light]
+shadow_opacity = 0.25

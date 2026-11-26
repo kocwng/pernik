@@ -1,0 +1,141 @@
+name: Pernik
+description: Build playful, theme-aware widgets for your GitHub profile README from pernik.toml and commit them.
+author: kocwng
+branding:
+  icon: music
+  color: orange
+
+inputs:
+  config:
+    description: Path to pernik.toml (its folder is the root the widgets write into).
+    default: pernik.toml
+  commit:
+    description: Commit and push the changed files ("true" or "false").
+    default: "true"
+  commit-message:
+    description: Message for the commit made by github-actions[bot].
+    default: "pernik: rebuild widgets"
+
+outputs:
+  changed:
+    description: '"true" when a commit was made.'
+    value: ${{ steps.commit.outputs.changed }}
+  videos:
+    description: MP4 files made by mixtape widgets with make_video = true (one per line).
+    value: ${{ steps.paths.outputs.videos }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Check for widgets that need extras
+      id: extras
+      shell: bash
+      env:
+        PYTHONPATH: ${{ github.action_path }}
+        CONFIG: ${{ inputs.config }}
+      run: echo "needed=$(python -m pernik needs-extras "$CONFIG")" >> "$GITHUB_OUTPUT"
+
+    - name: Install ffmpeg, numpy, scipy and Pillow
+      if: steps.extras.outputs.needed == 'true'
+      shell: bash
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq --no-install-recommends ffmpeg
+        python -m pip install --quiet numpy scipy pillow
+
+    - name: Build
+      id: build
+      shell: bash
+      env:
+        PYTHONPATH: ${{ github.action_path }}
+        CONFIG: ${{ inputs.config }}
+      run: |
+        set +e
+        python -m pernik build "$CONFIG"
+        echo "status=$?" >> "$GITHUB_OUTPUT"
+
+    - name: Find the files the build made
+      id: paths
+      shell: bash
+      env:
+        PYTHONPATH: ${{ github.action_path }}
+        CONFIG: ${{ inputs.config }}
+      run: |
+        python - <<'EOF'
+        import json, os
+        from pernik.config import load_config
+        cfg = load_config(os.environ['CONFIG'])
+        rel = lambda p: os.path.relpath(os.path.join(cfg['root'], p))
+        paths, videos = {rel(cfg['output']), rel(cfg['readme'])}, []
+        try:
+            with open(os.path.join(cfg['root'], cfg['output'], 'pernik.json')) as f:
+                widgets = json.load(f).get('widgets', [])
+        except (OSError, ValueError):
+            widgets = []
+        for w in widgets:
+            for p in w.get('extra', []):
+                if p.endswith('.mp4'):
+                    if os.path.exists(os.path.join(cfg['root'], p)):
+                        videos.append(rel(p))
+                else:
+                    paths.add(rel(p))
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+            f.write(f"manifest={rel(os.path.join(cfg['output'], 'pernik.json'))}\n")
+            f.write('paths<<PERNIK_EOF\n' + '\n'.join(sorted(paths)) + '\nPERNIK_EOF\n')
+            f.write('videos<<PERNIK_EOF\n' + '\n'.join(videos) + '\nPERNIK_EOF\n')
+        EOF
+
+    - name: Commit and push
+      id: commit
+      if: inputs.commit == 'true'
+      shell: bash
+      env:
+        PATHS: ${{ steps.paths.outputs.paths }}
+        MANIFEST: ${{ steps.paths.outputs.manifest }}
+        MESSAGE: ${{ inputs.commit-message }}
+      run: |
+        echo "changed=false" >> "$GITHUB_OUTPUT"
+        add=()
+        while IFS= read -r p; do
+          [ -n "$p" ] || continue
+          if [ -e "$p" ] || git ls-files --error-unmatch -- "$p" >/dev/null 2>&1; then add+=("$p"); fi
+        done <<< "$PATHS"
+        [ ${#add[@]} -gt 0 ] && git add -A -- "${add[@]}" ':(exclude)*.mp4'
+        # pernik.json records build times; on its own that is not worth a commit
+        if [ -z "$(git diff --cached --name-only -- . ":(exclude)$MANIFEST")" ]; then
+          git reset -q
+          echo "Nothing changed."
+          exit 0
+        fi
+        git -c user.name="github-actions[bot]" \
+            -c user.email="41898283+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "$MESSAGE"
+        echo "changed=true" >> "$GITHUB_OUTPUT"
+        case "$GITHUB_REF" in
+          refs/heads/*) ;;
+          *) echo "::notice::Not on a branch ($GITHUB_REF), so the commit was not pushed."; exit 0 ;;
+        esac
+        # if someone pushed while we were building, replay our commit on top and retry once
+        git push origin "HEAD:$GITHUB_REF_NAME" || {
+          git pull --rebase origin "$GITHUB_REF_NAME" && git push origin "HEAD:$GITHUB_REF_NAME"
+        }
+
+    - name: Attach the video
+      if: steps.paths.outputs.videos != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: pernik-video
+        path: ${{ steps.paths.outputs.videos }}
+        if-no-files-found: ignore
+        retention-days: 14
+
+    - name: Report build problems
+      if: steps.build.outputs.status != '0'
+      shell: bash
+      run: |
+        echo "::error::pernik build reported problems (see the Build step). Everything else was still saved."
+        exit 1

@@ -1,0 +1,62 @@
+# An example profile that uses every Pernik widget.
+# Build it with:  python3 -m pernik preview examples/profile/pernik.toml
+schema = 1
+user = "octocat"
+theme = "pernik"
+output = "pernik"
+
+[[widget]]
+id = "hello"
+kind = "hero"
+greeting = ["hello", "there!"]
+mascot = "banana"
+chords = "docs/tape/chords.json"
+
+[[widget]]
+id = "line-kawung"
+kind = "divider"
+style = "kawung"
+
+[[widget]]
+id = "about-title"
+kind = "heading"
+text = "about me"
+color = "langit"
+
+[[widget]]
+id = "line-wave"
+kind = "divider"
+style = "wave"
+
+[[widget]]
+id = "stack-title"
+kind = "heading"
+text = "tech stack"
+color = "pink"
+
+[[widget]]
+id = "stack"
+kind = "stack"
+icons = ["python", "go", "docker", "postgresql", "git", "figma"]
+
+[[widget]]
+id = "line-truntum"
+kind = "divider"
+style = "truntum"
+
+[[widget]]
+id = "tape"
+kind = "mixtape"
+song = "docs/music/demo.mp3"
+label = "demo tape"
+caption = ["give it", "a listen!"]
+
+[[widget]]
+id = "line-mega"
+kind = "divider"
+style = "mega-mendung"
+
+[[widget]]
+id = "bye"
+kind = "footer"
+text = "thanks for stopping by!"

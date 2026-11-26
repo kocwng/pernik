@@ -1,0 +1,13 @@
+{
+  "note": "Chord timeline for docs/music/demo.mp3 (seconds). Auto-detected, so it may be wrong: edit it by hand, then set chords = \"keep\" for this widget in pernik.toml so the build leaves it alone. Shapes: ukulele GCEA fret per string (G C E A), x = muted.",
+  "beat": 0.5,
+  "shapes": {
+    "C": "0003", "G": "0232", "Am": "2000", "F": "2010"
+  },
+  "timeline": [
+    ["C", 0.0, 2.82], ["G", 2.82, 4.72], ["Am", 4.72, 6.72], ["F", 6.72, 7.52],
+    ["Am", 7.52, 8.42], ["C", 8.42, 10.42], ["G", 10.42, 12.52], ["Am", 12.52, 14.92],
+    ["F", 14.92, 17.62]
+  ],
+  "source_sha1": "31786db0a3b5d30231db013835ad58561d47884f"
+}

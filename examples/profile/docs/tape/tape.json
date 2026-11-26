@@ -1,0 +1,23 @@
+{
+  "label": "demo tape",
+  "side": "A",
+  "song": "../music/demo.mp3",
+  "cross_origin": false,
+  "duration": 17.62,
+  "length": "0:18",
+  "owner": "octocat",
+  "repo": "octocat",
+  "chords": true,
+  "colors": {
+    "krem": "#FFF6E5",
+    "tinta": "#2B2340",
+    "jeruk": "#FF8A3D",
+    "pink": "#FF5FA2",
+    "kuning": "#FFD23F",
+    "mint": "#3DDC97",
+    "langit": "#4CC9F0",
+    "anggur": "#7B5CFF",
+    "round": "'Arial Rounded MT Bold', 'Nunito', 'Varela Round', 'Trebuchet MS', 'Segoe UI', sans-serif",
+    "body": "'Segoe UI', Ubuntu, 'Helvetica Neue', sans-serif"
+  }
+}

@@ -1,0 +1,40 @@
+# Copy this file to .github/workflows/pernik.yml in your profile repo (the one named like
+# your username). It rebuilds your Pernik widgets when you change pernik.toml or a song,
+# once a week (so date-based widgets stay fresh), and when you press "Run workflow" in the
+# Actions tab. The bot's own commits never start another run.
+#
+# One-time setup: Settings -> Actions -> General -> Workflow permissions ->
+# "Read and write permissions". For a mixtape page, also Settings -> Pages ->
+# "Deploy from a branch", your default branch, folder /docs.
+name: pernik
+
+on:
+  push:
+    paths:
+      - pernik.toml
+      - "**.mp3"
+      - "**.m4a"
+      - "**.ogg"
+      - "**.wav"
+      - .github/workflows/pernik.yml
+  schedule:
+    - cron: "23 4 * * 1"      # Mondays 04:23 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# one build at a time; a newer push cancels an older, still-running build
+concurrency:
+  group: pernik-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: kocwng/pernik@v0
+        with:
+          config: pernik.toml

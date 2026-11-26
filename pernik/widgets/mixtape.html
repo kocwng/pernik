@@ -1,0 +1,246 @@
+<!doctype html>
+<!-- made by pernik mixtape: rewritten on every build, so edit pernik.toml instead of this file -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tape</title>
+<meta name="description" content="A short recording, played on a cassette tape.">
+<style>
+  :root {
+    --krem: #FFF6E5; --tinta: #2B2340; --jeruk: #FF8A3D; --pink: #FF5FA2;
+    --kuning: #FFD23F; --mint: #3DDC97; --langit: #4CC9F0; --anggur: #7B5CFF;
+    --bg: var(--krem); --fg: var(--tinta); --dot: #2B234014; --shadow: #2B234059;
+    --round: 'Arial Rounded MT Bold', 'Nunito', 'Varela Round', 'Trebuchet MS', 'Segoe UI', sans-serif;
+    --body: 'Segoe UI', Ubuntu, 'Helvetica Neue', sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1d1730; --fg: var(--krem); --dot: #FFF6E512; --shadow: #00000080; }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    min-height: 100vh; display: grid; place-items: center; padding: 32px 16px; overflow-x: hidden;
+    background: radial-gradient(var(--dot) 2px, transparent 2.5px) 0 0 / 28px 28px, var(--bg);
+    color: var(--fg); font: 16px/1.5 var(--body);
+  }
+  .round { font-family: var(--round); font-weight: 800; }
+  main { width: min(640px, 100%); text-align: center; }
+
+  h1 { font-size: clamp(40px, 11vw, 72px); line-height: 1; margin: 0 0 28px; overflow-wrap: anywhere; }
+  h1 span { display: inline-block; animation: bob 2.4s cubic-bezier(.5,-0.4,.5,1.4) infinite; }
+  @keyframes bob { 0%,100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-8px) rotate(3deg); } }
+
+  .deck { position: relative; background: var(--anggur); border: 5px solid var(--krem); border-radius: 32px;
+    box-shadow: 6px 8px 0 var(--shadow); padding: 28px 22px 22px; margin-top: 40px; }
+  .viz { display: flex; gap: 6px; align-items: flex-end; justify-content: center; height: 170px; }
+  .viz i { flex: 1; max-width: 26px; min-height: 14px; height: 14px; border-radius: 99px; border: 3px solid var(--krem);
+    transition: height .06s linear; }
+
+  .ctrl { display: flex; align-items: center; gap: 16px; margin-top: 22px; }
+  button.play { flex: none; width: 76px; height: 76px; border-radius: 50%; border: 5px solid var(--krem);
+    background: var(--pink); color: var(--tinta); cursor: pointer; display: grid; place-items: center;
+    box-shadow: 4px 5px 0 var(--shadow); transition: transform .15s cubic-bezier(.5,-0.4,.5,1.6); }
+  button.play:hover { transform: scale(1.07) rotate(-4deg); }
+  button.play:active { transform: scale(.94); }
+  button.play svg { width: 30px; height: 30px; }
+  .track { flex: 1; text-align: left; color: var(--krem); min-width: 0; }
+  .track .t { font-size: 20px; }
+  input[type=range] { width: 100%; margin: 6px 0 0; accent-color: var(--kuning); }
+  .time { font: 13px ui-monospace, Menlo, monospace; opacity: .85; }
+  button:focus-visible, input:focus-visible { outline: 4px solid var(--kuning); outline-offset: 4px; }
+
+  .chord { position: absolute; top: -34px; right: -14px; width: 112px; padding: 8px 10px 10px; background: var(--krem);
+    color: var(--tinta); border: 4px solid var(--tinta); border-radius: 20px; box-shadow: 4px 5px 0 var(--shadow);
+    transform: rotate(5deg); z-index: 2; }
+  .chord[hidden] { display: none; }
+  .chord .name { font-size: 30px; line-height: 1; margin-bottom: 4px; }
+  .chord svg { width: 72px; height: 80px; display: block; margin: 0 auto; }
+  .chord.pop { animation: pop .35s cubic-bezier(.5,-0.4,.5,1.6); }
+  @keyframes pop { from { transform: rotate(5deg) scale(.7); } to { transform: rotate(5deg) scale(1); } }
+  .chord .next { font: 12px var(--body); opacity: .7; margin-top: 4px; }
+  @media (max-width: 480px) { .chord { width: 92px; right: -6px; top: -40px; } .chord .name { font-size: 24px; } .chord svg { width: 56px; height: 64px; } }
+  .msg { color: var(--krem); margin: 12px 0 0; font-size: 14px; }
+  .msg[hidden] { display: none; }
+  footer { margin-top: 30px; font-size: 14px; opacity: .8; }
+  a { color: var(--anggur); font-weight: 600; }
+  @media (prefers-color-scheme: dark) { a { color: var(--langit); } }
+  @media (prefers-reduced-motion: reduce) { h1 span, .chord.pop { animation: none; } .viz i { transition: none; } }
+</style>
+</head>
+<body>
+<main>
+  <h1 class="round" id="title" aria-label="tape"></h1>
+
+  <div class="deck">
+    <div class="chord" id="chord" aria-live="polite" hidden>
+      <div class="name round" id="cname">C</div>
+      <svg viewBox="0 0 72 80" id="cdiag" aria-hidden="true"></svg>
+      <div class="next" id="cnext"></div>
+    </div>
+    <div class="viz" id="viz" aria-hidden="true"></div>
+    <div class="ctrl">
+      <button class="play" id="play" aria-label="Play">
+        <svg viewBox="0 0 24 24"><path id="icon" d="M7 4.5v15a1 1 0 0 0 1.5.86l12-7.5a1 1 0 0 0 0-1.72l-12-7.5A1 1 0 0 0 7 4.5z" fill="currentColor"/></svg>
+      </button>
+      <div class="track">
+        <div class="t round" id="side">side A</div>
+        <input type="range" id="seek" min="0" max="1" step="0.1" value="0" aria-label="Position">
+        <div class="time" id="time">0:00</div>
+      </div>
+    </div>
+    <p class="msg" id="msg" role="status" hidden></p>
+  </div>
+
+  <footer><a id="owner" href="https://github.com/">github.com</a></footer>
+</main>
+
+<!-- the settings (label, song, colours) come from tape.json, written next to this page by `python -m pernik build` -->
+<audio id="audio" preload="auto"></audio>
+
+<script>
+  const PLAY = 'M7 4.5v15a1 1 0 0 0 1.5.86l12-7.5a1 1 0 0 0 0-1.72l-12-7.5A1 1 0 0 0 7 4.5z';
+  const PAUSE = 'M6 4h4v16H6zM14 4h4v16h-4z';
+  const $ = id => document.getElementById(id);
+  const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  let COLORS = ['#FFD23F', '#3DDC97', '#4CC9F0', '#FF5FA2', '#FF8A3D'];
+
+  function applyColors(c) {
+    const root = document.documentElement.style;
+    for (const k of ['krem', 'tinta', 'jeruk', 'pink', 'kuning', 'mint', 'langit', 'anggur']) {
+      if (c && /^#[0-9a-f]{6}$/i.test(c[k] || '')) root.setProperty('--' + k, c[k]);
+    }
+    if (c && c.round) root.setProperty('--round', c.round);
+    if (c && c.body) root.setProperty('--body', c.body);
+    COLORS = ['--kuning', '--mint', '--langit', '--pink', '--jeruk'].map(css);
+  }
+
+  function setTitle(text) {
+    const h = $('title');
+    h.textContent = '';
+    h.setAttribute('aria-label', text);
+    document.title = text;
+    [...text].forEach((ch, i) => {
+      const s = document.createElement('span');
+      s.textContent = ch === ' ' ? ' ' : ch;
+      s.style.color = COLORS[i % COLORS.length];
+      s.style.textShadow = '-3px -3px 0 var(--krem), 3px -3px 0 var(--krem), -3px 3px 0 var(--krem), 3px 3px 0 var(--krem), 0 4px 0 var(--krem), 6px 8px 0 var(--shadow)';
+      s.style.animationDelay = (i * 0.09) + 's';
+      s.setAttribute('aria-hidden', 'true');
+      h.appendChild(s);
+    });
+  }
+
+  const N = 16;
+  const bars = [...Array(N)].map(() => $('viz').appendChild(document.createElement('i')));
+  const paintBars = () => bars.forEach((b, i) => b.style.background = COLORS[i % COLORS.length]);
+
+  const audio = $('audio'), btn = $('play'), icon = $('icon'), seek = $('seek'), time = $('time');
+  const fmt = t => Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0');
+  btn.style.color = 'var(--tinta)';
+
+  let ctx, analyser, data, edges;
+  function setupAudio() {
+    if (ctx) return;
+    try {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      analyser = ctx.createAnalyser();
+      analyser.fftSize = 1024;
+      analyser.smoothingTimeConstant = 0.75;
+      ctx.createMediaElementSource(audio).connect(analyser);
+      analyser.connect(ctx.destination);
+      data = new Uint8Array(analyser.frequencyBinCount);
+      // bars cover ~60 Hz - 6 kHz on a log scale
+      const bin = ctx.sampleRate / analyser.fftSize;
+      edges = [...Array(N + 1)].map((_, i) => Math.round(60 * Math.pow(100, i / N) / bin));
+    } catch (e) { analyser = null; }   // no Web Audio: the song still plays, the bars rest
+  }
+
+  btn.addEventListener('click', () => {
+    setupAudio();
+    if (ctx && ctx.state === 'suspended') ctx.resume();
+    if (audio.paused) audio.play().catch(() => showMsg("This song couldn't be played here."));
+    else audio.pause();
+  });
+  audio.addEventListener('play', () => { icon.setAttribute('d', PAUSE); btn.setAttribute('aria-label', 'Pause'); requestAnimationFrame(draw); });
+  audio.addEventListener('pause', () => { icon.setAttribute('d', PLAY); btn.setAttribute('aria-label', 'Play'); });
+  audio.addEventListener('ended', () => { bars.forEach(b => b.style.height = '14px'); });
+  audio.addEventListener('loadedmetadata', () => { seek.max = audio.duration; });
+  audio.addEventListener('error', () => showMsg("The song file couldn't be loaded."));
+  seek.addEventListener('input', () => { audio.currentTime = +seek.value; if (CH) showChord(chordAt(+seek.value)); });
+  function showMsg(t) { $('msg').textContent = t; $('msg').hidden = false; }
+
+  const TAPE = { label: 'my tape', side: 'A', song: '', cross_origin: false, duration: 0, owner: '', chords: true, colors: null };
+  fetch('tape.json').then(r => r.ok ? r.json() : {}).catch(() => ({})).then(j => {
+    Object.assign(TAPE, j);
+    applyColors(TAPE.colors);
+    paintBars();
+    setTitle(TAPE.label);
+    if (TAPE.cross_origin) audio.crossOrigin = 'anonymous';   // song served from another host (CORS)
+    if (TAPE.song) audio.src = TAPE.song; else showMsg('No song yet: set song = "..." in pernik.toml.');
+    $('side').textContent = 'side ' + TAPE.side;
+    if (TAPE.duration) { seek.max = TAPE.duration; time.textContent = '0:00 / ' + fmt(TAPE.duration); }
+    if (TAPE.owner) {
+      const a = $('owner');
+      a.href = 'https://github.com/' + encodeURIComponent(TAPE.owner);
+      a.textContent = 'github.com/' + TAPE.owner;
+    }
+    if (TAPE.chords) loadChords();
+  });
+
+  // live chord card, synced to the recording (chords.json next to this page)
+  let CH = null, lastChord = -1;
+  function loadChords() {
+    fetch('chords.json').then(r => r.json()).then(j => {
+      if (!j.timeline || !j.timeline.length) throw new Error('no chords');
+      CH = j; $('chord').hidden = false; showChord(0);
+    }).catch(() => { $('chord').hidden = true; });
+  }
+  function diagram(shape) {
+    const xs = [12, 28, 44, 60], top = 14, fh = 15, ink = css('--tinta');
+    const frets = [...shape].filter(c => /\d/.test(c)).map(Number);
+    const base = frets.length && Math.max(...frets) > 4 ? Math.min(...frets.filter(f => f > 0)) : 1;
+    let g = base === 1 ? `<rect x="10" y="${top - 3}" width="52" height="4" rx="2" fill="${ink}"/>`
+                       : `<text x="4" y="${top + fh * .5 + 3}" text-anchor="middle" font-size="9" fill="${ink}">${base}</text>`;
+    for (let f = 1; f <= 4; f++) g += `<line x1="12" x2="60" y1="${top + f * fh}" y2="${top + f * fh}" stroke="${ink}" stroke-width="1.5" opacity=".5"/>`;
+    xs.forEach(x => g += `<line x1="${x}" x2="${x}" y1="${top}" y2="${top + 4 * fh}" stroke="${ink}" stroke-width="2"/>`);
+    [...shape].slice(0, 4).forEach((c, i) => {
+      if (c.toLowerCase() === 'x') g += `<text x="${xs[i]}" y="${top - 6}" text-anchor="middle" font-size="9" fill="${ink}">x</text>`;
+      else if (c === '0' || !/\d/.test(c)) g += `<circle cx="${xs[i]}" cy="${top - 8}" r="3.5" fill="none" stroke="${ink}" stroke-width="1.8"/>`;
+      else g += `<circle cx="${xs[i]}" cy="${top + (+c - base + .5) * fh}" r="6" fill="${COLORS[i]}" stroke="${ink}" stroke-width="2"/>`;
+    });
+    return g;
+  }
+  function showChord(i) {
+    if (!CH || i === lastChord) return;
+    lastChord = i;
+    const [name] = CH.timeline[i], nxt = CH.timeline[i + 1];
+    $('cname').textContent = name;
+    $('cdiag').innerHTML = diagram(String((CH.shapes || {})[name] || '0000'));
+    $('cnext').textContent = nxt ? 'next: ' + nxt[0] : '';
+    const c = $('chord');
+    c.classList.remove('pop'); void c.offsetWidth; c.classList.add('pop');
+  }
+  function chordAt(t) {
+    const tl = CH.timeline;
+    for (let i = 0; i < tl.length; i++) if (t < tl[i][2]) return i;
+    return tl.length - 1;
+  }
+
+  function draw() {
+    seek.value = audio.currentTime;
+    time.textContent = fmt(audio.currentTime) + ' / ' + fmt(audio.duration || TAPE.duration);
+    if (analyser) {
+      analyser.getByteFrequencyData(data);
+      bars.forEach((b, i) => {
+        let v = 0;
+        for (let k = edges[i]; k <= Math.max(edges[i], edges[i + 1] - 1); k++) v = Math.max(v, data[k]);
+        b.style.height = (14 + Math.pow(v / 255, 1.6) * 150) + 'px';
+      });
+    }
+    if (CH) showChord(chordAt(audio.currentTime));
+    if (!audio.paused) requestAnimationFrame(draw);
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+# The default Pernik theme: playful stickers with cream outlines and a soft ink shadow.
+# Every widget reads its colours from here, so swapping this file restyles the whole profile.
+name = "pernik"
+schema = 1
+
+# Bright colours used for letters, stripes, bars and shapes, in this order.
+accents = ["#FF8A3D", "#FF5FA2", "#FFD23F", "#3DDC97", "#4CC9F0", "#7B5CFF"]
+# Named colours widgets can ask for by name.
+[colors]
+jeruk = "#FF8A3D"
+pink = "#FF5FA2"
+kuning = "#FFD23F"
+mint = "#3DDC97"
+langit = "#4CC9F0"
+anggur = "#7B5CFF"
+cream = "#FFF6E5"
+ink = "#2B2340"
+
+[font]
+# CSS font stacks. SVG shown on GitHub can't load web fonts, so these are system fonts.
+round = "'Arial Rounded MT Bold', 'Nunito', 'Varela Round', 'Trebuchet MS', 'Segoe UI', sans-serif"
+body = "'Segoe UI', Ubuntu, 'Helvetica Neue', sans-serif"
+
+[sticker]
+outline = 6           # width of the cream outline around every shape, in px
+shadow_dx = 4         # how far the ink shadow sits right and down
+shadow_dy = 5
+
+# Per-mode values. Widgets render once for GitHub's light theme and once for dark.
+[light]
+page = "#ffffff"      # GitHub's page colour, only used by the preview
+outline = "#FFF6E5"   # sticker edge
+shadow = "#2B2340"
+shadow_opacity = 0.35
+text = "#2B2340"      # loose text that isn't sitting on a sticker
+muted = "#57606a"
+
+[dark]
+page = "#0d1117"
+outline = "#FFF6E5"
+shadow = "#000000"
+shadow_opacity = 0.45
+text = "#FFF6E5"
+muted = "#8b949e"
