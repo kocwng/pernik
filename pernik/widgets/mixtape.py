@@ -289,10 +289,47 @@ def mixtape(opts, ctx):
         svg = cassette_svg(t, ctx.pal)
     out = Out(svg=svg, alt=sentence(' '.join(t['caption'])) + ' Play the recording.',
               href=t['link'], same=ctx.pal.style != 'komik')
+    if t['video_auto']:
+        t['video'] = auto_video_url(t, ctx)
     if t['video']:
         # the README shows GitHub's video player instead of the cassette picture
         out.markdown = video_markdown(t)
     return out
+
+
+# ---------------------------------------------------------------- video = "auto"
+# The Action renders the MP4, uploads it with `gh issue comment --attach` (pernik.media, needs a
+# PERNIK_TOKEN secret) and records the link in <output>/media.json. The README uses that link
+# while it matches the current video; a changed song or style waits for the next upload.
+
+_STAMPS = {}          # (root, widget id) -> stamp of the video this build wants
+
+
+def media_path(ctx_or_root, output=None):
+    if output is None:
+        return os.path.join(ctx_or_root.out, 'media.json')
+    return os.path.join(ctx_or_root, output, 'media.json')
+
+
+def read_media(path):
+    try:
+        with open(path, encoding='utf-8') as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def auto_video_url(t, ctx):
+    entry = read_media(media_path(ctx)).get(ctx.widget_id) or {}
+    url, have = entry.get('url', ''), entry.get('stamp', '')
+    want = _STAMPS.get((ctx.root, ctx.widget_id))
+    if url and (want is None or want == have):
+        return url                           # up to date (or can't tell here: keep the last upload)
+    if ctx.mode == 'light':
+        ctx.log('video: waiting for the Action to upload the new video (needs the PERNIK_TOKEN secret); '
+                'the cassette shows until then')
+    return ''
 
 
 # ---------------------------------------------------------------- settings
@@ -315,9 +352,12 @@ def settings(opts, ctx):
     if mode not in ('auto', 'keep', 'off'):
         raise ValueError(f'chords = "{mode}": use "auto", "keep" or "off"')
     video = str(opts.get('video') or '').strip()
-    if video and not video.startswith('https://'):
-        raise ValueError('video must be the https://github.com/user-attachments/... link GitHub gives you '
-                         'after you upload the MP4')
+    video_auto = video.lower() == 'auto'
+    if video_auto:
+        video = ''
+    elif video and not video.startswith('https://'):
+        raise ValueError('video must be "auto" (the Action uploads it; needs PERNIK_TOKEN) or the '
+                         'https://github.com/user-attachments/... link GitHub gives you after you upload the MP4')
 
     owner, repo = owner_repo(ctx.root, ctx.user)
     chords_file = posixpath.join(page_dir, 'chords.json')
@@ -343,7 +383,8 @@ def settings(opts, ctx):
         'caption': caption,
         'link': str(opts.get('link') or '').strip() or page_url or f'https://github.com/{owner}/{repo}',
         'page_dir': page_dir, 'pages': pages, 'page_url': page_url, 'chords': mode,
-        'chords_file': chords_file, 'video': video, 'make_video': bool(opts.get('make_video')),
+        'chords_file': chords_file, 'video': video, 'video_auto': video_auto,
+        'make_video': bool(opts.get('make_video')) or video_auto,
         'duration': secs, 'length': length_text(secs), 'owner': owner, 'repo': repo,
     }
 
@@ -507,6 +548,10 @@ def make_video(t, ctx):
     seconds = float(os.environ.get('PERNIK_VIDEO_SECONDS') or 0) or None    # test hook: a short clip
     stamp = hashlib.sha1(json.dumps([sha1(t['song_abs']), t['label'], t['side'], t['length'], colors,
                                      seconds, vid.W, vid.H, 1] + ([style] if style != 'sticker' else [])).encode()).hexdigest()[:16]
+    _STAMPS[(ctx.root, ctx.widget_id)] = stamp
+    if t['video_auto'] and read_media(media_path(ctx)).get(ctx.widget_id, {}).get('stamp') == stamp:
+        ctx.log('video: the uploaded video is up to date')
+        return
     if vid.stamp_of(path) == stamp:
         ctx.log(f'video: {rel} is up to date')
     else:
@@ -524,7 +569,9 @@ def make_video(t, ctx):
         ctx.written.append(ignore)
     else:
         ctx.write(ignore, '# videos are uploaded through github.com by hand, not committed\n*.mp4\n')
-    if not t['video']:
+    if t['video_auto']:
+        ctx.log(f'video: {rel} is ready; the Action uploads it when the PERNIK_TOKEN secret is set')
+    elif not t['video']:
         ctx.log('video: to play it on your profile (GitHub only plays videos uploaded through its editor):\n'
                 f'    1. On github.com open README.md, click the pencil to edit, and drag {rel} into the text.\n'
                 '       (In the GitHub Action, download it first: the run page lists it under Artifacts.)\n'

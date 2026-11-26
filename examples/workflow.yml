@@ -38,3 +38,5 @@ jobs:
       - uses: kocwng/pernik@v0
         with:
           config: pernik.toml
+          # optional: lets mixtape videos (video = "auto") upload themselves and play on your profile
+          token: ${{ secrets.PERNIK_TOKEN }}

@@ -15,6 +15,12 @@ inputs:
   commit-message:
     description: Message for the commit made by github-actions[bot].
     default: "pernik: rebuild widgets"
+  token:
+    description: >-
+      A personal access token (pass secrets.PERNIK_TOKEN) so mixtape videos with video = "auto"
+      are uploaded and play on your profile. Fine-grained, only your profile repo, Contents and
+      Issues read and write. The Action's own GITHUB_TOKEN can't upload attachments.
+    default: ""
 
 outputs:
   changed:
@@ -57,6 +63,22 @@ runs:
         set +e
         python -m pernik build "$CONFIG"
         echo "status=$?" >> "$GITHUB_OUTPUT"
+
+    - name: Upload videos
+      id: media
+      if: inputs.token != ''
+      shell: bash
+      env:
+        PYTHONPATH: ${{ github.action_path }}
+        CONFIG: ${{ inputs.config }}
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        set +e
+        python -m pernik media "$CONFIG"
+        status=$?
+        # put the new links in the README (the video files are already made, so this is quick)
+        python -m pernik build "$CONFIG" > /dev/null
+        [ $status -eq 0 ] || echo "::warning::pernik could not upload the video (see above); the README keeps the cassette."
 
     - name: Find the files the build made
       id: paths
@@ -124,14 +146,14 @@ runs:
           git pull --rebase origin "$GITHUB_REF_NAME" && git push origin "HEAD:$GITHUB_REF_NAME"
         }
 
-    - name: Attach the video
-      if: steps.paths.outputs.videos != ''
+    - name: Attach the video (only without a token, for uploading by hand)
+      if: steps.paths.outputs.videos != '' && inputs.token == ''
       uses: actions/upload-artifact@v7
       with:
         name: pernik-video
         path: ${{ steps.paths.outputs.videos }}
         if-no-files-found: ignore
-        retention-days: 14
+        retention-days: 1
 
     - name: Report build problems
       if: steps.build.outputs.status != '0'

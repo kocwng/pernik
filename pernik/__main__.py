@@ -6,6 +6,7 @@
     list      show the widget kinds and their options
     init      write a starter pernik.toml and README.md in the current folder
     needs-extras  print "true" if pernik.toml uses a widget that needs numpy/scipy/pillow/ffmpeg
+    media     upload mixtape videos (video = "auto") with gh, so they play on your profile
 """
 import os
 import sys
@@ -33,6 +34,14 @@ def main(argv=None):
         reg = load_all()
         kinds = {w['kind'] for w in load_config(config)['widgets']} if os.path.exists(config) else set()
         print('true' if any(reg[k].heavy for k in kinds if k in reg) else 'false')
+        return 0
+    if cmd == 'media':                    # the Action runs this when PERNIK_TOKEN is set
+        from .media import MediaError, upload
+        try:
+            upload(config)
+        except MediaError as e:
+            print(f'! media: {e}')
+            return 1
         return 0
     if cmd not in ('build', 'preview', 'check'):
         print(__doc__)

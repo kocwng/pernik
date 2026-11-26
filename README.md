@@ -132,7 +132,7 @@ song = "music/my-song.m4a"
 
 - **Cassette and player page:** Pernik draws the cassette and writes a player page to `docs/<id>/`. Turn on *Settings → Pages* (branch `main`, folder `/docs`) and clicking the cassette opens the player.
 - **Chords:** they're worked out from the song automatically. Edit `docs/tape/chords.json` to fix them, then set `chords = "keep"`.
-- **Playing on the profile itself:** GitHub won't play audio in a README, but it will play an uploaded video. Set `make_video = true`, download the MP4 from the Action run, and drag it into GitHub's README editor. Copy the `https://github.com/user-attachments/...` link it gives you into `video = "..."`, and cancel the edit. The README then shows a player strip in place of the cassette.
+- **Playing on the profile itself:** GitHub won't play audio in a README, but it plays a video that was uploaded to GitHub as an attachment. Set `video = "auto"` and Pernik's Action renders a player-strip video of your song, uploads it with `gh` to an issue called "Pernik media" in your repo, and puts the player in your README. Nothing to do by hand. It needs one secret: create a [fine-grained token](https://github.com/settings/personal-access-tokens/new) for your profile repo only, with **Contents** and **Issues** set to read and write, and save it as `PERNIK_TOKEN` under *Settings → Secrets and variables → Actions*. (The Action's own token can't upload attachments; GitHub only accepts a person's token.) Without the secret the cassette shows instead, linking to the player page. Visitors press play and unmute: GitHub starts every README video muted.
 
 Only use songs you have the rights to.
 
