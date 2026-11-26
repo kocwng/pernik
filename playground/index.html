@@ -113,13 +113,28 @@
           <p>Clicking your mixtape opens a player page in <code>docs/</code>. It only works once GitHub Pages is on: <em>Settings → Pages → Deploy from a branch → main, /docs → Save</em>.</p>
           <p><a class="btn" id="step-pages-link" target="_blank" rel="noopener">Open Pages settings<span class="sr-only"> (opens in a new tab)</span></a></p>
         </div>
-        <div class="optional">
-          <h4 class="label">Optional: keep it up to date automatically</h4>
-          <p>Only needed if you want to edit <code>pernik.toml</code> on GitHub later and have the pictures redrawn for you. Your profile works without it.</p>
+        <div class="optional" id="step-wf">
+          <h4 class="label" id="wf-title">Optional: keep it up to date automatically</h4>
+          <p id="wf-why">Only needed if you want to edit <code>pernik.toml</code> on GitHub later and have the pictures redrawn for you. Your profile works without it.</p>
           <ol class="plain">
             <li><a class="btn" id="step-workflow" target="_blank" rel="noopener">Add the update workflow<span class="sr-only"> (opens in a new tab)</span></a> The file is filled in for you; click <em>Commit changes</em>.</li>
             <li><a id="step-actions" target="_blank" rel="noopener">Open Actions settings<span class="sr-only"> (opens in a new tab)</span></a>, then under <em>Workflow permissions</em> choose <em>Read and write permissions</em> and click <em>Save</em>.</li>
           </ol>
+        </div>
+        <div class="optional" id="step-video" hidden>
+          <h4 class="label">Let the Action upload your video</h4>
+          <p>Your mixtape is set to play as a video on your profile. GitHub only plays videos that a person uploaded, so the Action needs a token that may upload for you. You can skip this: everything above still works, and your profile shows the cassette instead.</p>
+          <ol class="plain">
+            <li><a class="btn" id="step-token" href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Make a token<span class="sr-only"> (opens in a new tab)</span></a> (a fine-grained personal access token), with:
+              <ul>
+                <li><strong>Repository access:</strong> <em>Only select repositories</em> → <code id="tok-repo"></code></li>
+                <li><strong>Permissions:</strong> <em>Add permissions</em>, search <em>Contents</em> and set <em>Read and write</em>; search <em>Issues</em> and set <em>Read and write</em>. <em>Metadata: Read-only</em> appears by itself.</li>
+                <li><strong>Expiration:</strong> 90 days or 1 year, at most 366 days (with a later date GitHub’s <em>Generate token</em> button does nothing).</li>
+                <li>Click <em>Generate token</em> and copy it. GitHub shows it only once.</li>
+              </ul></li>
+            <li><a class="btn" id="step-secret" target="_blank" rel="noopener">Add it as a secret<span class="sr-only"> (opens in a new tab)</span></a> Name: <code>PERNIK_TOKEN</code>. Paste the token as the secret and click <em>Add secret</em>.</li>
+          </ol>
+          <p class="warn"><strong>Keep it secret:</strong> never paste this token anywhere else, including this page.</p>
         </div>
       </section>
 

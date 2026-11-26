@@ -18,7 +18,7 @@
   const ADVANCED = {
     hero: ['chords', 'beat'],
     divider: ['colors', 'ground', 'height', 'seed', 'animate'],
-    mixtape: ['link', 'page_dir', 'pages', 'chords', 'video', 'make_video'],
+    mixtape: ['link', 'page_dir', 'pages', 'chords', 'make_video'],
   };
   // options the komik drawings read that aren't in the widget defaults (pernik/widgets/_komik_*.py)
   const EXTRAS = {
@@ -28,7 +28,7 @@
   const NUMERIC_LISTS = new Set();
   const ALIGNS = ['left', 'center', 'right'];
   const alignOf = (w) => (ALIGNS.includes(w.opts.align) ? w.opts.align : 'left');
-  const START = { mixtape: { song: 'docs/music/demo.mp3' }, text: { md: '' } };
+  const START = { mixtape: { song: 'docs/music/demo.mp3', video: 'auto' }, text: { md: '' } };
   const BASE_TEXT_ID = 'text';   // what a new widget starts with
   const HINTS = {
     'hero.greeting': 'One or two lines.',
@@ -58,7 +58,7 @@
     'mixtape.caption': 'One or two lines.',
     'mixtape.chords': 'auto works the chords out from the song in the GitHub Action.',
     'mixtape.video': 'A https://github.com/user-attachments/… video you uploaded.',
-    'mixtape.make_video': 'The GitHub Action renders the MP4; the playground skips it.',
+    'mixtape.make_video': 'Also render an MP4 to upload by hand. Not needed with “Play on my profile”.',
     'mixtape.link': 'Where the cassette goes. Empty: the tape player page.',
   };
   const KOMIK_ONLY = 'Komik themes only';
@@ -93,7 +93,17 @@ jobs:
       - uses: kocwng/pernik@v0
         with:
           config: pernik.toml
+          # optional: lets mixtape videos (video = "auto") upload themselves
+          token: \${{ secrets.PERNIK_TOKEN }}
 `;
+  const VIDEO_NOTE = 'Your profile shows a video player once the GitHub Action has uploaded it (needs the PERNIK_TOKEN secret, see the steps after Generate).';
+  const VIDEO_MODES = [
+    ['', 'Cassette only'],
+    ['auto', 'Play on my profile (automatic, recommended)'],
+    ['own', 'I uploaded a video myself'],
+  ];
+  const videoMode = (w) => w.videoMode || (String(w.opts.video || '').trim().toLowerCase() === 'auto' ? 'auto'
+    : String(w.opts.video || '').trim() ? 'own' : '');
   // GitHub usernames: 1-39 letters/digits, single hyphens, not at either end
   const USER_RE = /^(?=.{1,39}$)[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/;
   const TEXT_HINT = 'Shown as written, between the pictures. Markdown works: **bold**, *italic*, - lists, [links](https://…), # headings, emoji 🎉.';
@@ -366,6 +376,10 @@ jobs:
       } else {
         box.replaceChildren(content);
       }
+      const wantNote = w.kind === 'mixtape' && String(w.opts.video || '').trim().toLowerCase() === 'auto';
+      const note = box.querySelector('.vnote');
+      if (wantNote && !note) box.append(h('p', { class: 'vnote', text: VIDEO_NOTE }));
+      else if (!wantNote && note) note.remove();
       const chip = box.querySelector('.busy');
       if (busy || (c && !fresh && workerReady)) {
         if (!chip) box.append(h('span', { class: 'busy', 'aria-hidden': 'true', text: 'drawing…' }));
@@ -472,6 +486,7 @@ jobs:
     const fid = (k) => `f-${w.uid}-${k}`;
     const field = (key, def) => {
       if (w.kind === 'hero' && key === 'hp') return heartsField(w, fid);
+      if (w.kind === 'mixtape' && key === 'video') return videoField(w, fid);
       const type = fieldType(w.kind, key, def);
       const v = w.opts[key];
       const hint = HINTS[`${w.kind}.${key}`] || dh[key] || '';
@@ -525,6 +540,33 @@ jobs:
       h('ul', { class: 'wlogs', id: 'wl-' + w.uid, hidden: true, 'aria-label': `Notes from ${w.id}` }),
       h('p', { class: 'wfiles', id: 'wf-' + w.uid }),
     ].flat().filter(Boolean);
+  }
+  function videoField(w, fid) {
+    const mode = videoMode(w);
+    const url = mode === 'own' ? String(w.opts.video || '') : '';
+    const ui = h('input', { id: fid('video-url'), type: 'url', value: url, placeholder: 'https://github.com/user-attachments/assets/…',
+      spellcheck: 'false', autocomplete: 'off', 'data-key': 'video-url', 'aria-describedby': fid('video-url') + '-h' });
+    return h('fieldset', { class: 'field video' },
+      h('legend', { class: 'label', text: 'video on your profile' }),
+      h('div', { class: 'choices' }, VIDEO_MODES.map(([v, label]) => h('label', { class: 'choice' },
+        h('input', { type: 'radio', name: `video-${w.uid}`, value: v, checked: v === mode, 'data-key': 'video-mode' }),
+        h('span', { text: label })))),
+      h('div', { class: 'video-url', hidden: mode !== 'own' },
+        h('label', { class: 'label', for: fid('video-url'), text: 'video link' }), ui,
+        h('p', { class: 'hint', id: fid('video-url') + '-h', text: 'The https://github.com/user-attachments/… link GitHub gave you when you dragged the MP4 into its editor.' })),
+      h('p', { class: 'hint video-note', hidden: mode !== 'auto', text: VIDEO_NOTE }));
+  }
+  function readVideo(li, w) {
+    const mode = (li.querySelector('[data-key="video-mode"]:checked') || {}).value || '';
+    const urlEl = li.querySelector('[data-key="video-url"]');
+    const url = urlEl.value.trim();
+    const okUrl = url === '' || /^https:\/\/\S+$/.test(url);
+    urlEl.setAttribute('aria-invalid', String(!okUrl));
+    w.videoMode = mode;
+    w.opts.video = mode === 'auto' ? 'auto' : mode === 'own' && okUrl ? url : '';
+    li.querySelector('.video-url').hidden = mode !== 'own';
+    li.querySelector('.video-note').hidden = mode !== 'auto';
+    paintWidget(w);
   }
   function heartsField(w, fid) {
     const hp = Array.isArray(w.opts.hp) ? w.opts.hp : [];
@@ -642,6 +684,8 @@ jobs:
       li.querySelectorAll('.whead [aria-label]').forEach((b) => {
         b.setAttribute('aria-label', b.getAttribute('aria-label').replace(/“.*”/, `“${v}”`));
       });
+    } else if (key === 'video-mode' || key === 'video-url') {
+      readVideo(li, w);
     } else if (key === 'hp-full' || key === 'hp-total') {
       readHearts(li, w);
     } else {
@@ -1033,7 +1077,8 @@ jobs:
     if (!workerReady) { genSay('The renderer is still loading; try again in a moment.'); return; }
     const skipped = state.widgets.filter((w) => w.kind === 'mixtape' && !songs.has(w.opts.song));
     const list = state.widgets.filter((w) => !skipped.includes(w));
-    lastGen = { user: state.user, skipped, mixtape: list.some((w) => w.kind === 'mixtape') };
+    lastGen = { user: state.user, skipped, mixtape: list.some((w) => w.kind === 'mixtape'),
+      video: list.some((w) => w.kind === 'mixtape' && String(w.opts.video || '').trim().toLowerCase() === 'auto') };
     $('#generate').disabled = true;
     genSay('Drawing your profile with Pernik…');
     worker.postMessage({ type: 'zip', profile: true, toml: tomlText(list, true), readme: readmeText(list), user: state.user });
@@ -1059,6 +1104,15 @@ jobs:
     $('#step-workflow').href = `${repo}/new/main?filename=${encodeURIComponent('.github/workflows/pernik.yml')}&value=${encodeURIComponent(WORKFLOW)}`;
     $('#step-actions').href = `${repo}/settings/actions`;
     $('#step-pages').hidden = !lastGen.mixtape;
+    // with video = "auto" the workflow is what uploads the video, so it isn't optional any more
+    $('#wf-title').textContent = lastGen.video ? 'Add the update workflow (needed for your video)' : 'Optional: keep it up to date automatically';
+    $('#wf-why').textContent = lastGen.video
+      ? 'Your mixtape video is made and uploaded by this workflow. It also redraws the pictures when you edit pernik.toml on GitHub.'
+      : 'Only needed if you want to edit pernik.toml on GitHub later and have the pictures redrawn for you. Your profile works without it.';
+    $('#step-wf').classList.toggle('needed', lastGen.video);
+    $('#step-video').hidden = !lastGen.video;
+    $('#tok-repo').textContent = `${u}/${u}`;
+    $('#step-secret').href = `${repo}/settings/secrets/actions/new`;
     $('#step-pages-link').href = `${repo}/settings/pages`;
     const p = (m.info && m.info.problems) || [];
     const notes = [];

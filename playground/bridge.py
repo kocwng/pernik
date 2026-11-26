@@ -216,6 +216,8 @@ def _clean_logs(text, wid):
         ln = ln.strip()
         if ln.startswith(prefix):
             ln = ln[len(prefix):].strip()
+        if ln.startswith('video:') and ('not installed' in ln or 'waiting for the Action' in ln):
+            continue                  # video = "auto": the page explains what happens in the Action
         if ln.startswith('chords:') and 'not installed' in ln:
             ln = 'chords: worked out from the song by the GitHub Action (the playground skips it)'
         if ln and ln not in lines:
