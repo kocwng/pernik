@@ -25,7 +25,9 @@
     hero: { tagline: '', hp: [], exp: null, exp_label: '', issue: 1 },
     footer: { name: '', link: '' },
   };
-  const NUMERIC_LISTS = new Set(['hero.hp']);
+  const NUMERIC_LISTS = new Set();
+  const ALIGNS = ['left', 'center', 'right'];
+  const alignOf = (w) => (ALIGNS.includes(w.opts.align) ? w.opts.align : 'left');
   const START = { mixtape: { song: 'docs/music/demo.mp3' }, text: { md: '' } };
   const BASE_TEXT_ID = 'text';   // what a new widget starts with
   const HINTS = {
@@ -33,7 +35,7 @@
     'hero.chords': 'A chords.json in your repo for the mascot to strum along to.',
     'hero.beat': 'Seconds per strum.',
     'hero.tagline': 'Up to 12 letters print as circled letters.',
-    'hero.hp': 'Hearts as full, total, e.g. 4, 6. Only real numbers, please.',
+    'hero.hp': 'Hearts, e.g. 4 full of 6. Leave both empty for no hearts.',
     'hero.exp': 'EXP bar fill from 0 to 1. Empty hides it.',
     'hero.exp_label': 'Text on the bar’s tab (default EXP).',
     'hero.issue': 'The “No.01” in the header; 0 hides it.',
@@ -157,7 +159,9 @@ jobs:
   }
   /** Only the options that differ from Pernik's own defaults (what goes in pernik.toml). */
   function clean(w) {
-    if (w.kind === 'text') return { md: String(w.opts.md || '') };
+    if (w.kind === 'text') {
+      return alignOf(w) === 'left' ? { md: String(w.opts.md || '') } : { md: String(w.opts.md || ''), align: alignOf(w) };
+    }
     const out = {};
     const spec = (specs[w.kind] || {}).defaults || {};
     const extra = EXTRAS[w.kind] || {};
@@ -329,7 +333,11 @@ jobs:
   }
   function paintWidget(w) {
     if (w.kind === 'text') {
-      for (const box of document.querySelectorAll(`.w[data-uid="${w.uid}"]`)) box.replaceChildren(...mdBlocks(w.opts.md));
+      const al = alignOf(w);
+      for (const box of document.querySelectorAll(`.w[data-uid="${w.uid}"]`)) {
+        // GitHub keeps <div align="..."> and centres everything inside it, list items included
+        box.replaceChildren(...(al === 'left' ? mdBlocks(w.opts.md) : [h('div', { align: al }, mdBlocks(w.opts.md))]));
+      }
       return;
     }
     const c = cache.get(w.uid);
@@ -448,14 +456,22 @@ jobs:
       const fid = `f-${w.uid}-md`;
       const ta = h('textarea', { id: fid, rows: 6, 'data-key': 'md', 'data-type': 'md', 'aria-describedby': fid + '-h' });
       ta.value = w.opts.md || '';
+      const al = alignOf(w);
       return [h('div', { class: 'field' },
         h('label', { class: 'label', for: fid, text: 'your words (markdown)' }), ta,
-        h('p', { class: 'hint', id: fid + '-h', text: TEXT_HINT }))];
+        h('p', { class: 'hint', id: fid + '-h', text: TEXT_HINT })),
+      h('fieldset', { class: 'field align', 'aria-describedby': fid + '-ah' },
+        h('legend', { class: 'label', text: 'Align' }),
+        h('div', { class: 'seg' }, ALIGNS.map((a) => h('label', {},
+          h('input', { type: 'radio', name: `align-${w.uid}`, value: a, checked: a === al, 'data-key': 'align', 'data-type': 'radio' }),
+          h('span', { text: a })))),
+        h('p', { class: 'hint', id: fid + '-ah', text: 'Tip: centre a short intro, and put lists in their own left-aligned text block, like most profiles do.' }))];
     }
     const spec = specs[w.kind] || { defaults: {}, doc: '' };
     const dh = docHints(spec.doc);
     const fid = (k) => `f-${w.uid}-${k}`;
     const field = (key, def) => {
+      if (w.kind === 'hero' && key === 'hp') return heartsField(w, fid);
       const type = fieldType(w.kind, key, def);
       const v = w.opts[key];
       const hint = HINTS[`${w.kind}.${key}`] || dh[key] || '';
@@ -509,6 +525,35 @@ jobs:
       h('ul', { class: 'wlogs', id: 'wl-' + w.uid, hidden: true, 'aria-label': `Notes from ${w.id}` }),
       h('p', { class: 'wfiles', id: 'wf-' + w.uid }),
     ].flat().filter(Boolean);
+  }
+  function heartsField(w, fid) {
+    const hp = Array.isArray(w.opts.hp) ? w.opts.hp : [];
+    const num = (part, i) => h('div', { class: 'hp-part' },
+      h('label', { class: 'label', for: fid('hp-' + part), text: part }),
+      h('input', { id: fid('hp-' + part), type: 'number', min: '0', max: '20', step: '1', inputmode: 'numeric',
+        value: Number.isInteger(hp[i]) ? String(hp[i]) : '', 'data-key': 'hp-' + part, 'aria-describedby': fid('hp') + '-h' }));
+    return h('fieldset', { class: 'field hp' },
+      h('legend', { class: 'label', text: 'hp (hearts)' }),
+      h('div', { class: 'hp-row' }, num('full', 0), num('total', 1)),
+      h('p', { class: 'hint', id: fid('hp') + '-h', text: HINTS['hero.hp'] }));
+  }
+  function readHearts(li, w) {
+    const get = (part) => li.querySelector(`[data-key="hp-${part}"]`);
+    const [f, t] = [get('full'), get('total')];
+    const val = (el) => (el.value.trim() === '' ? null : Number(el.value));
+    const full = val(f), total = val(t);
+    const okNum = (n) => n === null || (Number.isInteger(n) && n >= 0 && n <= 20);
+    const hint = li.querySelector(`#${CSS.escape(f.getAttribute('aria-describedby'))}`);
+    f.setAttribute('aria-invalid', String(!okNum(full)));
+    t.setAttribute('aria-invalid', String(!okNum(total) || (full !== null && total !== null && total < full)));
+    let msg = HINTS['hero.hp'];
+    if (!okNum(full) || !okNum(total)) msg = 'Use whole numbers from 0 to 20.';
+    else if ((full === null) !== (total === null)) msg = 'Fill in both numbers to show hearts (or leave both empty).';
+    else if (full !== null && total < full) msg = 'total should be at least as big as full.';
+    else if (total === 0) msg = 'total 0 shows no hearts; leave both empty instead.';
+    hint.textContent = msg;
+    const good = okNum(full) && okNum(total) && full !== null && total !== null && total >= full && total > 0;
+    w.opts.hp = good ? [full, total] : [];
   }
   function paintCardState(li, w) {
     const c = cache.get(w.uid);
@@ -597,6 +642,8 @@ jobs:
       li.querySelectorAll('.whead [aria-label]').forEach((b) => {
         b.setAttribute('aria-label', b.getAttribute('aria-label').replace(/“.*”/, `“${v}”`));
       });
+    } else if (key === 'hp-full' || key === 'hp-total') {
+      readHearts(li, w);
     } else {
       const type = el.dataset.type;
       const def = baseDefaults(w.kind)[key];
@@ -1054,7 +1101,13 @@ jobs:
   function readmeText(list = state.widgets) {
     const parts = [];
     for (const w of list) {
-      if (w.kind === 'text') { if (String(w.opts.md || '').trim()) parts.push(String(w.opts.md).trim()); }
+      if (w.kind === 'text') {
+        const md = String(w.opts.md || '').trim();
+        if (!md) continue;
+        const al = alignOf(w);
+        // blank lines around the text, so GitHub still renders the markdown inside the HTML block
+        parts.push(al === 'left' ? md : `<div align="${al}">\n\n${md}\n\n</div>`);
+      }
       else parts.push(`<!-- pernik:${w.id} -->\n<!-- /pernik:${w.id} -->`);
     }
     return parts.join('\n\n') + '\n';

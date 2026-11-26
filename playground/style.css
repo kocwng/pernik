@@ -341,6 +341,13 @@ a.btn { text-decoration: none; }
 .song-now .name { font: 700 14px/1.4 var(--mono); overflow-wrap: anywhere; }
 .song-now .tag { font: 12px/1.4 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
 
+/* text block alignment, hero hearts */
+.field.align .seg { margin-bottom: 4px; }
+.field.align legend, .field.hp legend { float: none; margin-bottom: 8px; }
+.hp-row { display: flex; flex-wrap: wrap; gap: 8px 12px; }
+.hp-part { display: flex; align-items: center; gap: 8px; }
+.hp-part input { width: 72px; }
+
 /* your words in the README preview, the way GitHub shows markdown */
 .readme .w.md { margin: 0 0 16px; font-size: 16px; line-height: 1.5; overflow-wrap: anywhere; }
 .readme .w.md:empty { display: none; }
@@ -385,7 +392,7 @@ a.btn { text-decoration: none; }
 .readme { max-width: 830px; margin: 0 auto; }
 .readme .w { position: relative; margin: 0 0 16px; }
 .readme .w img { display: block; width: 100%; height: auto; }
-.readme .w a { display: block; }
+.readme .w:not(.md) a { display: block; }
 .readme .busy {
   position: absolute; top: 8px; right: 8px; padding: 2px 8px; border-radius: 2px;
   font: 11px/1.5 var(--mono); background: #1C1520; color: #FAF3F8;
