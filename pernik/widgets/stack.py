@@ -4,6 +4,7 @@ Logos come from Simple Icons (https://simpleicons.org), downloaded once from jsD
 pinned version and cached in <repo>/.pernik-cache/simple-icons/<version>/ so later builds and
 offline previews don't need the network.
 """
+import difflib
 import json
 import math
 import os
@@ -104,11 +105,113 @@ def _icon_path(root, slug, say):
     return d
 
 
+def _norm(text):
+    """Simple Icons' slug rules: lower case, + -> plus, . -> dot, & -> and, only a-z0-9."""
+    t = str(text).lower().replace('+', 'plus').replace('.', 'dot').replace('&', 'and')
+    return re.sub(r'[^a-z0-9]', '', t)
+
+
+def find_icon(raw, idx):
+    """Match what the user typed to a Simple Icons slug.
+
+    Tries, in order: our aliases, the slug itself, a title written another way ("Node.js"),
+    then a unique icon whose title has that word ("kafka" -> Apache Kafka).
+    Returns (slug or None, hint), where hint is a suggestion when nothing matched."""
+    key = raw.strip().lower()
+    slug = ALIASES.get(key, ALIASES.get(key.replace(' ', ''), _norm(key)))
+    if not idx or slug in idx:
+        return slug, ''
+    by_title = [s for s, v in idx.items() if _norm(v[0]) == slug]
+    if by_title:
+        return by_title[0], ''
+    words = [w for w in re.split(r'[^a-z0-9]+', key) if w]
+    if words:
+        hits = [s for s, v in idx.items()
+                if all(w in re.split(r'[^a-z0-9]+', v[0].lower()) for w in words)]
+        if len(hits) == 1:
+            return hits[0], ''
+        if 1 < len(hits) <= 4:
+            return None, 'did you mean ' + ' or '.join(f'"{h}"' for h in sorted(hits, key=len)) + '?'
+    close = difflib.get_close_matches(slug, list(idx), n=3, cutoff=.75)
+    return None, ('did you mean ' + ' or '.join(f'"{c}"' for c in close) + '?') if close else ''
+
+
+SAFE_VB = re.compile(r'\s*(-?[\d.]+)[\s,]+(-?[\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)\s*')
+
+
+def custom_logo(root, spec, say):
+    """A logo from the user's own SVG file: (path d, viewBox, colour or None), or None.
+
+    spec is a path inside the repo, or {file = "...", color = "#rrggbb"}. Only <path> shapes are
+    used (all drawn in one colour), so the result stays a safe, single-colour picture."""
+    if isinstance(spec, dict):
+        rel, color = spec.get('file', ''), spec.get('color')
+    else:
+        rel, color = spec, None
+    rel = str(rel or '').strip()
+    full = os.path.normpath(os.path.join(root, rel))
+    if not rel or os.path.isabs(rel) or not full.startswith(os.path.normpath(root) + os.sep):
+        say(f'logo file "{rel}" must be a path inside your repo')
+        return None
+    try:
+        with open(full, encoding='utf-8') as f:
+            raw = f.read(400_000)
+    except OSError as e:
+        say(f'could not read logo file "{rel}" ({e.strerror or e})')
+        return None
+    vb = re.search(r'viewBox="([^"]+)"', raw)
+    m = SAFE_VB.fullmatch(vb.group(1)) if vb else None
+    if not m:
+        say(f'logo file "{rel}" needs a viewBox, e.g. viewBox="0 0 24 24"')
+        return None
+    box = tuple(float(v) for v in m.groups())
+    ds = [d for d in re.findall(r'<path[^>]*\sd="([^"]+)"', raw) if SAFE_D.fullmatch(d)]
+    if not ds:
+        say(f'logo file "{rel}" has no <path> shapes Pernik can use (convert shapes to paths first)')
+        return None
+    if re.search(r'<(rect|circle|ellipse|polygon|polyline|line|text|image)\b', raw):
+        say(f'logo file "{rel}": only its <path> shapes are drawn; convert other shapes to paths')
+    if color is not None and not re.fullmatch(r'#[0-9a-fA-F]{6}', str(color)):
+        color = None
+    return ' '.join(ds), box, color
+
+
+def logo_transform(x, y, size, box=(0, 0, 24, 24)):
+    """Transform that fits a path drawn in `box` (a viewBox) into a size x size square at x, y."""
+    bx, by, bw, bh = box
+    sc = size / max(bw, bh)
+    ox, oy = x + (size - bw * sc) / 2 - bx * sc, y + (size - bh * sc) / 2 - by * sc
+    return f'translate({num(ox)} {num(oy)}) scale({sc:.4f})', sc
+
+
+def resolve(raw, ctx, idx, logos, say):
+    """(title, d, box, colour hex or None) for one entry in `icons`; d is None when no logo."""
+    if raw in logos or raw.lower() in logos:
+        got = custom_logo(ctx.root, logos.get(raw, logos.get(raw.lower())), say)
+        if got:
+            d, box, color = got
+            return raw, d, box, color
+    slug, hint = find_icon(raw, idx)
+    info = idx.get(slug) if slug else None
+    d = _icon_path(ctx.root, slug, say) if slug and (info or not idx) and re.fullmatch(r'[a-z0-9]+', slug) else None
+    if d is None and not _memo.get('offline'):
+        missing = 'is not in Simple Icons' if not slug or not info else 'has no logo file'
+        say(f'"{raw}" {missing}' + (f' ({hint})' if hint else '')
+            + f'. To use your own logo: logos = {{ {_toml_key(raw)} = "path/to/logo.svg" }}')
+    title = info[0] if (info and d) else raw
+    return title, d, (0, 0, 24, 24), ('#' + info[1]) if info else None
+
+
+def _toml_key(k):
+    return k if re.fullmatch(r'[A-Za-z0-9_-]+', k) else '"' + k.replace('"', '') + '"'
+
+
 @widget('stack', defaults={'numbered': True, 'icons': ['python', 'git', 'docker'], 'columns': 0, 'size': 80, 'labels': True})
 def stack(opts, ctx):
     """Tech-stack logos as die-cut stickers (Simple Icons slugs).
 
-    icons    e.g. ["go", "docker", "mysql"] (slugs from simpleicons.org)
+    icons    e.g. ["go", "docker", "kafka"]: Simple Icons names; titles and single words work too
+    logos    your own logo files for names Simple Icons lacks, e.g. { aws = "assets/aws.svg" }
     columns  tiles per row; 0 = as many as fit
     size     tile width in px (48-140)
     labels   show the name under the logo
@@ -130,23 +233,19 @@ def stack(opts, ctx):
     labels = labels if isinstance(labels, bool) else str(labels).lower() not in ('false', 'no', '0', 'off')
 
     idx = _index(ctx.root, say) if icons else {}
-    tiles = []   # (label, path d or None, logo colour)
+    logos = opts.get('logos') or {}
+    logos = logos if isinstance(logos, dict) else {}
+    tiles = []   # (label, path d or None, logo colour, viewBox)
     for raw in icons:
-        slug = raw.lower().replace(' ', '')
-        slug = ALIASES.get(slug, slug)
-        info = idx.get(slug)
-        d = _icon_path(ctx.root, slug, say) if (info or not idx) and re.fullmatch(r'[a-z0-9]+', slug) else None
+        title, d, box, col = resolve(raw, ctx, idx, logos, say)
         if d is None:
-            if not _memo.get('offline'):
-                say(f'unknown icon "{raw}" (see https://simpleicons.org for slugs); showing just its name')
-            tiles.append((raw, None, None))
+            tiles.append((raw, None, None, box))
             continue
-        title, hexc = info if info else (raw, '2B2340')
-        col = '#' + hexc
+        col = col or s.ink
         # brand colour, or ink when it would melt into the cream tile (pale yellows, light greens)
         if contrast(col, s.cream) < 1.8:
             col = s.ink
-        tiles.append((title, d, col))
+        tiles.append((title, d, col, box))
 
     n = len(tiles)
     gap = round(size * .32)
@@ -170,7 +269,7 @@ def stack(opts, ctx):
 
     body = []
     ew = pal.outline_w
-    for i, (label, d, col) in enumerate(tiles):
+    for i, (label, d, col, box) in enumerate(tiles):
         row, c = divmod(i, cols)
         in_row = min(cols, n - row * cols)
         x0 = (W - in_row * pitch + gap) / 2
@@ -188,7 +287,8 @@ def stack(opts, ctx):
         if d:
             ls = size * .5
             ly = -th / 2 + (size - ls) / 2 + (size * .04 if labels else 0)
-            parts.append(f'<path transform="translate({num(-ls / 2)} {num(ly)}) scale({ls / 24:.4f})" d="{d}" fill="{col}"/>')
+            tf, _ = logo_transform(-ls / 2, ly, ls, box)
+            parts.append(f'<path transform="{tf}" d="{d}" fill="{col}"/>')
             if labels:
                 fs = fit(label, size - 18, lfs, 7)
                 parts.append(f'<text class="r" x="0" y="{num(th / 2 - size * .17)}" font-size="{num(fs)}" '

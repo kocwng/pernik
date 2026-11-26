@@ -78,6 +78,33 @@ class ReadmeTests(unittest.TestCase):
         self.assertEqual(same, text)
 
 
+class IconNameTests(unittest.TestCase):
+    IDX = {'apachekafka': ['Apache Kafka', '231F20'], 'apachespark': ['Apache Spark', 'E25A1C'],
+           'sparkar': ['Spark AR', 'FF5C83'], 'nodedotjs': ['Node.js', '5FA04E'], 'go': ['Go', '00ADD8'],
+           'springboot': ['Spring Boot', '6DB33F']}
+
+    def test_names_people_type(self):
+        from pernik.widgets.stack import find_icon
+        self.assertEqual(find_icon('kafka', self.IDX), ('apachekafka', ''))
+        self.assertEqual(find_icon('Apache Kafka', self.IDX), ('apachekafka', ''))
+        self.assertEqual(find_icon('Node.js', self.IDX), ('nodedotjs', ''))
+        self.assertEqual(find_icon('golang', self.IDX), ('go', ''))
+        self.assertEqual(find_icon('Spring Boot', self.IDX), ('springboot', ''))
+        slug, hint = find_icon('spark', self.IDX)
+        self.assertIsNone(slug)
+        self.assertIn('apachespark', hint)
+        self.assertEqual(find_icon('aws', self.IDX), (None, ''))
+
+    def test_custom_logo_file(self):
+        from pernik.widgets.stack import custom_logo
+        with tempfile.TemporaryDirectory() as d:
+            write(d, 'assets/x.svg', '<svg viewBox="0 0 100 50"><path d="M0 0h100v50z"/></svg>')
+            dpath, box, color = custom_logo(d, {'file': 'assets/x.svg', 'color': '#FF9900'}, print)
+            self.assertEqual(box, (0, 0, 100, 50))
+            self.assertEqual(color, '#FF9900')
+            self.assertIsNone(custom_logo(d, '../outside.svg', lambda *a: None))
+
+
 class CheckTests(unittest.TestCase):
     def test_flags_unsafe_svg(self):
         with tempfile.TemporaryDirectory() as d:

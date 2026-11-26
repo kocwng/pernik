@@ -12,7 +12,7 @@ import re
 from .. import komik as K
 from . import Out
 from ._komik_heading import fit_label, flag, label_text, n
-from .stack import ALIASES, _icon_path, _index, _memo
+from .stack import _index, logo_transform, resolve
 
 W = 900
 PAD = 24           # card outer edge (4) + frame (4) + 16 inside
@@ -47,14 +47,12 @@ def render(opts, ctx):
         want = 0
 
     idx = _index(ctx.root, say) if icons else {}
-    items = []                       # (title, path d or None)
+    logos = opts.get('logos') or {}
+    logos = logos if isinstance(logos, dict) else {}
+    items = []                       # (title, path d or None, viewBox)
     for raw in icons:
-        slug = ALIASES.get(raw.lower().replace(' ', ''), raw.lower().replace(' ', ''))
-        info = idx.get(slug)
-        d = _icon_path(ctx.root, slug, say) if (info or not idx) and re.fullmatch(r'[a-z0-9]+', slug) else None
-        if d is None and not _memo.get('offline'):
-            say(f'unknown icon "{raw}" (see https://simpleicons.org for slugs); showing a monogram')
-        items.append((info[0] if (info and d) else raw, d))
+        title, d, box, _ = resolve(raw, ctx, idx, logos, say)
+        items.append((title, d, box))
 
     count = len(items)
     cols = _columns(count, want)
@@ -71,18 +69,18 @@ def render(opts, ctx):
     for r in range(rows):
         row = items[r * cols:(r + 1) * cols]
         m = len(row)                 # a short last row stretches, like a manga page
-        for j, (title, d) in enumerate(row):
+        for j, (title, d, box) in enumerate(row):
             i = r * cols + j
             x = PAD + round(j * (inner + GUT) / m)
             w = PAD + round((j + 1) * (inner + GUT) / m) - GUT - x
             y = PAD + r * (PANEL_H + GUT)
-            panels.append(_panel(k, rng, i, x, y, w, title, d, numbered))
+            panels.append(_panel(k, rng, i, x, y, w, title, d, numbered, box))
     if not items:
         panels.append(f'<text x="{W / 2:g}" y="{h / 2 + 5:g}" font-size="14" text-anchor="middle" class="km" '
                       f'fill="{k.ink}">no tools listed yet</text>')
 
     body = k.card(0, 0, W, h) + f'<defs>{shapes}</defs>' + ''.join(panels)
-    names = [t for t, _ in items]
+    names = [t for t, *_ in items]
     title = 'Tech stack: ' + ', '.join(names) if names else 'Tech stack'
     desc = (f'{count} comic panels, one per tool' + (', numbered in order' if numbered else '') + ': '
             + ', '.join(names) + '.') if names else 'No tools listed yet.'
@@ -92,7 +90,7 @@ def render(opts, ctx):
     return Out(svg=svg, alt=title)
 
 
-def _panel(k, rng, i, x, y, w, title, d, numbered):
+def _panel(k, rng, i, x, y, w, title, d, numbered, box=(0, 0, 24, 24)):
     cx = x + w / 2
     cy = y + BAR + (PANEL_H - BAR) / 2
     out = []                                                       # the card's paper shows through
@@ -107,13 +105,17 @@ def _panel(k, rng, i, x, y, w, title, d, numbered):
                f'transform="translate({n(cx)} {n(cy)}) rotate({rng.randrange(0, 30)})"/>')
     halo = f'stroke="{k.paper}" stroke-linejoin="round" paint-order="stroke"'
     if d:
-        s = LOGO / 24
-        out.append(f'<path transform="translate({n(cx - LOGO / 2)} {n(cy - LOGO / 2)}) scale({s:.4f})" d="{compact_path(d)}" '
+        tf, s = logo_transform(cx - LOGO / 2, cy - LOGO / 2, LOGO, box)
+        path = compact_path(d) if box == (0, 0, 24, 24) else d
+        out.append(f'<path transform="{tf}" d="{path}" '
                    f'fill="{k.ink}" {halo} stroke-width="{2 * K.MARGIN / s:.2f}"/>')
     else:
-        letter = next((c for c in title if c.isalnum()), '?').upper()
-        out.append(f'<text x="{n(cx)}" y="{n(cy + 26)}" font-size="72" text-anchor="middle" class="kl" '
-                   f'fill="{k.ink}" {halo} stroke-width="{2 * K.MARGIN}">{letter}</text>')
+        # no logo: a short name (AWS, GCP) is printed whole, a longer one as its first letter
+        word = re.sub(r'[^A-Za-z0-9]', '', title)
+        mono = word.upper() if 1 < len(word) <= 4 else (word[:1].upper() or '?')
+        fs = 72 if len(mono) == 1 else {2: 56, 3: 44, 4: 34}[len(mono)]
+        out.append(f'<text x="{n(cx)}" y="{n(cy + fs * .36)}" font-size="{fs}" text-anchor="middle" class="kl" '
+                   f'fill="{k.ink}" {halo} stroke-width="{2 * K.MARGIN}">{K.esc(mono)}</text>')
     if numbered:
         out.append(k.badge(x + w - 24, y + PANEL_H - 24, i + 1, r=14, filled=True))
     out.append(k.panel(x, y, w, PANEL_H, fill='none'))               # the ink border on top

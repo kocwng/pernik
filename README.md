@@ -69,11 +69,27 @@ Run `python3 -m pernik list` for every option.
 | `hero` | Your greeting in big colourful letters, with a banana playing ukulele | `greeting`, `mascot` (`"banana"` or `"none"`), `chords` (a chords.json to strum along to) |
 | `divider` | A section divider: a wavy ribbon or a batik band that draws itself in | `style` (`wave`, `kawung`, `truntum`, `mega-mendung`, `sekar-jagad`, `dots`), `colors`, `height` |
 | `heading` | A section title on a coloured sticker pill | `text`, `color`, `align` |
-| `stack` | Tech logos as tilted die-cut stickers | `icons` (Simple Icons names like `"go"`, `"docker"`), `columns`, `size`, `labels` |
+| `stack` | Your tools, each with its logo: comic panels in komik, tilted stickers in stiker | `icons` (names like `"go"`, `"kafka"`, `"Node.js"`), `logos` (your own SVG files), `columns`, `numbered` |
 | `footer` | A rainbow ribbon with a thank-you message | `text` |
 | `mixtape` | A cassette for your own song, linking to a player page with a live chord card. It can also make a video that plays right on your profile | `song`, `label`, `caption`, `chords`, `make_video`, `video` |
 
 The batik dividers are procedural designs *inspired by* traditional motifs. [docs/motifs.md](docs/motifs.md) explains where each motif comes from.
+
+## Logos in the tech stack
+
+Logos come from [Simple Icons](https://simpleicons.org). You can type a tool's slug, its full name, or one word of it: `"kafka"` finds Apache Kafka and `"Node.js"` finds nodedotjs. If a name matches nothing, the build log suggests close matches.
+
+Some brands aren't in Simple Icons, because their owners asked for them to be removed. AWS and other Amazon logos are one example. Those tools show their name instead of a logo; a short name like AWS is printed whole. To show a real logo, add an SVG file to your repo and point to it:
+
+```toml
+[[widget]]
+id = "stack"
+kind = "stack"
+icons = ["go", "kafka", "aws"]
+logos = { aws = "assets/aws.svg" }    # or { aws = { file = "assets/aws.svg", color = "#FF9900" } }
+```
+
+Only the file's `<path>` shapes are used, drawn in one colour. Make sure you're allowed to use the logo; the brand guidelines usually say how.
 
 ## Looks and themes
 
