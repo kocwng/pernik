@@ -1,0 +1,836 @@
+/* Pernik playground: edit a profile, see it drawn by the real Pernik (Python, in a worker),
+   copy the pernik.toml. No framework; the page works from gallery.json before Python loads. */
+'use strict';
+
+(() => {
+  // ------------------------------------------------------------------ tables
+  const KIND_ORDER = ['hero', 'divider', 'heading', 'stack', 'mixtape', 'footer'];
+  const BASE_ID = { hero: 'hello', divider: 'line', heading: 'title', stack: 'stack', mixtape: 'tape', footer: 'bye' };
+  const CHOICES = {
+    'divider.style': ['wave', 'kawung', 'truntum', 'mega-mendung', 'sekar-jagad', 'dots', 'film', 'hearts'],
+    'hero.mascot': ['banana', 'none'],
+    'heading.align': ['left', 'center', 'right'],
+    'heading.color': ['pink', 'jeruk', 'kuning', 'mint', 'langit', 'anggur', 'ink'],
+    'mixtape.chords': ['auto', 'keep', 'off'],
+    'mixtape.pages': ['docs', '/'],
+  };
+  const LINES = new Set(['greeting', 'caption']);          // lists typed one item per line
+  const ADVANCED = {
+    hero: ['chords', 'beat'],
+    divider: ['colors', 'ground', 'height', 'seed', 'animate'],
+    mixtape: ['link', 'page_dir', 'pages', 'chords', 'video', 'make_video'],
+  };
+  // options the komik drawings read that aren't in the widget defaults (pernik/widgets/_komik_*.py)
+  const EXTRAS = {
+    hero: { tagline: '', hp: [], exp: null, exp_label: '', issue: 1 },
+    footer: { name: '', link: '' },
+  };
+  const NUMERIC_LISTS = new Set(['hero.hp']);
+  const START = { mixtape: { song: 'docs/music/demo.mp3' } };   // what a new widget starts with
+  const HINTS = {
+    'hero.greeting': 'One or two lines.',
+    'hero.chords': 'A chords.json in your repo for the mascot to strum along to.',
+    'hero.beat': 'Seconds per strum.',
+    'hero.tagline': 'Up to 12 letters print as circled letters.',
+    'hero.hp': 'Hearts as full, total, e.g. 4, 6. Only real numbers, please.',
+    'hero.exp': 'EXP bar fill from 0 to 1. Empty hides it.',
+    'hero.exp_label': 'Text on the bar’s tab (default EXP).',
+    'hero.issue': 'The “No.01” in the header; 0 hides it.',
+    'divider.style': 'Batik bands draw themselves in. film and hearts are komik themes only.',
+    'divider.colors': 'Colour names or hex, comma separated. Empty: the theme’s.',
+    'divider.ground': 'Batik base colour (name or hex). Empty: automatic.',
+    'divider.height': 'auto, or a height in px.',
+    'divider.seed': 'Empty: from your username and the widget id.',
+    'divider.animate': 'Draws itself in once, then a tiny idle glint.',
+    'heading.number': 'Numbered badge; 0 hides it.',
+    'heading.note': 'A small side note.',
+    'heading.color': 'Pill colour (sticker themes).',
+    'stack.icons': 'Simple Icons names, comma separated: go, docker, mysql…',
+    'stack.columns': '0 = as many as fit in a row.',
+    'stack.size': 'Tile width in px (48–140).',
+    'footer.name': 'Default: @username.',
+    'footer.link': 'Where clicking the footer goes.',
+    'mixtape.song': 'A song file in your repo. In the playground the demo song stands in for it.',
+    'mixtape.label': 'On the cassette label. Default: “username tape”.',
+    'mixtape.caption': 'One or two lines.',
+    'mixtape.chords': 'auto works the chords out from the song in the GitHub Action.',
+    'mixtape.video': 'A https://github.com/user-attachments/… video you uploaded.',
+    'mixtape.make_video': 'The GitHub Action renders the MP4; the playground skips it.',
+    'mixtape.link': 'Where the cassette goes. Empty: the tape player page.',
+  };
+  const KOMIK_ONLY = 'Komik themes only';
+  const WORKFLOW = `name: pernik
+
+on:
+  push:
+    paths:
+      - pernik.toml
+      - "**.mp3"
+      - "**.m4a"
+      - "**.ogg"
+      - "**.wav"
+      - .github/workflows/pernik.yml
+  schedule:
+    - cron: "23 4 * * 1"      # Mondays 04:23 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pernik-\${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: kocwng/pernik@v0
+        with:
+          config: pernik.toml
+`;
+  const WORDS = 'Write a few lines about yourself here. Pernik only changes what sits between its markers.';
+  const USER_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
+  const ID_RE = /^[A-Za-z0-9_-]+$/;
+
+  // ------------------------------------------------------------------ state
+  let gallery = { themes: [], widgets: {}, prerender: {} };
+  let specs = {};
+  let uidN = 0;
+  const state = { user: 'octocat', theme: 'komik', widgets: [] };
+  const openSet = new Set();
+  const cache = new Map();      // uid -> {key, result, urls: {light, dark}}
+  const pending = new Map();    // uid -> key asked of the worker
+  let workerReady = false;
+  let demoSecs = 0;
+  let demoAsked = false;
+  let lastMs = null;
+
+  const $ = (s, el = document) => el.querySelector(s);
+  const store = {
+    get(k) { try { return localStorage.getItem('pernik-playground:' + k); } catch (_) { return null; } },
+    set(k, v) { try { localStorage.setItem('pernik-playground:' + k, v); } catch (_) { /* private mode */ } },
+  };
+
+  function h(tag, attrs, ...kids) {
+    const el = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (v === null || v === undefined || v === false) continue;
+      if (k === 'class') el.className = v;
+      else if (k === 'text') el.textContent = v;
+      else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+      else if (k in el && typeof v !== 'string') el[k] = v;
+      else el.setAttribute(k, v === true ? '' : v);
+    }
+    for (const kid of kids.flat()) if (kid !== null && kid !== undefined && kid !== false) el.append(kid);
+    return el;
+  }
+
+  // ------------------------------------------------------------------ options
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  function baseDefaults(kind) {
+    return Object.assign({}, (specs[kind] || {}).defaults || {}, EXTRAS[kind] || {});
+  }
+  function newWidget(kind, id, opts) {
+    return { uid: 'w' + (++uidN), kind, id: id || freeId(kind), opts: Object.assign(baseDefaults(kind), START[kind] || {}, opts || {}) };
+  }
+  function freeId(kind, taken) {
+    const used = new Set(taken || state.widgets.map((w) => w.id));
+    const base = BASE_ID[kind] || kind;
+    if (!used.has(base)) return base;
+    for (let i = 2; ; i++) if (!used.has(`${base}-${i}`)) return `${base}-${i}`;
+  }
+  /** Only the options that differ from Pernik's own defaults (what goes in pernik.toml). */
+  function clean(w) {
+    const out = {};
+    const spec = (specs[w.kind] || {}).defaults || {};
+    const extra = EXTRAS[w.kind] || {};
+    for (const [k, v] of Object.entries(w.opts)) {
+      if (k in spec) {
+        if (!same(v, spec[k]) && v !== null) out[k] = v;
+      } else if (k in extra) {
+        if (v === null || v === '' || (Array.isArray(v) && !v.length) || same(v, extra[k])) continue;
+        out[k] = v;
+      } else if (v !== null && v !== '') {
+        out[k] = v;
+      }
+    }
+    return out;
+  }
+  function fieldType(kind, key, def) {
+    if (CHOICES[`${kind}.${key}`]) return 'select';
+    if (typeof def === 'boolean') return 'bool';
+    if (typeof def === 'number') return 'number';
+    if (Array.isArray(def)) return LINES.has(key) ? 'lines' : 'list';
+    if (def === null || def === 'auto') return 'loose';      // text that may be a number
+    return 'text';
+  }
+  function parseValue(type, raw, def, numericList) {
+    if (type === 'bool') return !!raw;
+    if (type === 'number') { const n = Number(raw); return raw === '' || Number.isNaN(n) ? def : n; }
+    if (type === 'list' || type === 'lines') {
+      const parts = String(raw).split(type === 'lines' ? /\n/ : /[,\n]/).map((s) => s.trim()).filter(Boolean);
+      return numericList ? parts.map(Number).filter((n) => !Number.isNaN(n)) : parts;
+    }
+    if (type === 'loose') {
+      const s = String(raw).trim();
+      if (s === '') return def;
+      return /^-?\d+(\.\d+)?$/.test(s) ? Number(s) : s;
+    }
+    return String(raw);
+  }
+  function showValue(type, v) {
+    if (v === null || v === undefined) return '';
+    if (type === 'list') return v.join(', ');
+    if (type === 'lines') return v.join('\n');
+    return String(v);
+  }
+  function docHints(doc) {
+    const out = {};
+    for (const line of String(doc || '').split('\n')) {
+      const m = line.match(/^\s{2,}(\w+)\s{2,}(.+)$/);
+      if (m && !out[m[1]]) out[m[1]] = m[2].trim();
+    }
+    return out;
+  }
+
+  // ------------------------------------------------------------------ worker
+  const worker = new Worker('worker.js', { type: 'module' });
+  worker.onmessage = (e) => {
+    const m = e.data;
+    if (m.type === 'status') setLoading(`Loading the renderer: ${m.text} Showing the default looks meanwhile.`);
+    else if (m.type === 'ready') onReady(m);
+    else if (m.type === 'fatal') setLoading(`Couldn’t load the renderer (${m.text}). The default looks still show; reload to try again.`, 'failed');
+    else if (m.type === 'rendered') onRendered(m);
+    else if (m.type === 'zip') onZip(m);
+  };
+  worker.onerror = (e) => setLoading(`The renderer stopped (${e.message || 'worker error'}). Reload to try again.`, 'failed');
+  worker.postMessage({ type: 'init' });
+
+  function setLoading(text, cls) {
+    const box = $('#loading');
+    $('#loading-text').textContent = text;
+    box.classList.remove('done', 'failed');
+    if (cls) box.classList.add(cls);
+  }
+  function onReady(m) {
+    workerReady = true;
+    setLoading(`Renderer ready: Pernik ${m.version} on Python ${m.python}, running in your browser.`, 'done');
+    $('#engine').textContent = `Pernik ${m.version} + Pyodide ${m.pyodide} (Python ${m.python})`;
+    $('#download').disabled = false;
+    flush();
+  }
+  function measureDemo() {
+    if (demoAsked || !state.widgets.some((w) => w.kind === 'mixtape')) return;
+    demoAsked = true;
+    const a = new Audio();
+    a.preload = 'metadata';
+    a.addEventListener('loadedmetadata', () => {
+      if (!Number.isFinite(a.duration)) return;
+      demoSecs = Math.round(a.duration * 100) / 100;
+      worker.postMessage({ type: 'demo', secs: demoSecs });
+      flush();
+    }, { once: true });
+    a.src = 'demo.mp3';
+  }
+
+  function keyOf(w) {
+    return JSON.stringify([state.theme, state.user, w.id, w.kind, clean(w), w.kind === 'mixtape' ? demoSecs : 0]);
+  }
+  function flush() {
+    measureDemo();
+    if (!workerReady) return;
+    for (const w of state.widgets) {
+      const key = keyOf(w);
+      const c = cache.get(w.uid);
+      if ((c && c.key === key) || pending.get(w.uid) === key) continue;
+      pending.set(w.uid, key);
+      worker.postMessage({
+        type: 'render', uid: w.uid, key,
+        payload: { user: state.user, theme: state.theme, widget: Object.assign({ id: w.id, kind: w.kind }, clean(w)) },
+      });
+      paintWidget(w);
+    }
+    updateStatus();
+  }
+  let timer = null;
+  function schedule(ms = 300) {
+    clearTimeout(timer);
+    timer = setTimeout(flush, ms);
+    refreshOutputs();
+  }
+  function onRendered({ uid, key, result }) {
+    if (pending.get(uid) === key) pending.delete(uid);
+    const w = state.widgets.find((x) => x.uid === uid);
+    if (!w || keyOf(w) !== key) { updateStatus(); return; }
+    const old = cache.get(uid);
+    if (old) revoke(old);
+    const entry = { key, result, urls: {} };
+    if (!result.error) {
+      entry.urls.light = URL.createObjectURL(new Blob([result.light], { type: 'image/svg+xml' }));
+      entry.urls.dark = result.same ? entry.urls.light
+        : URL.createObjectURL(new Blob([result.dark], { type: 'image/svg+xml' }));
+    }
+    cache.set(uid, entry);
+    lastMs = result.ms;
+    paintWidget(w);
+    paintCard(w);
+    updateStatus();
+  }
+  function revoke(entry) {
+    const seen = new Set();
+    for (const u of Object.values(entry.urls)) if (u && !seen.has(u)) { seen.add(u); URL.revokeObjectURL(u); }
+  }
+  function updateStatus() {
+    const st = $('#status');
+    if (!workerReady) { st.textContent = ''; return; }
+    if (pending.size) { st.textContent = `Drawing ${pending.size} widget${pending.size > 1 ? 's' : ''}…`; return; }
+    const bad = state.widgets.filter((w) => (cache.get(w.uid) || {}).result?.error);
+    if (bad.length) st.textContent = `${bad.length} widget${bad.length > 1 ? 's have' : ' has'} a problem: ${bad.map((w) => w.id).join(', ')}.`;
+    else st.textContent = `Up to date: ${state.widgets.length} widget${state.widgets.length === 1 ? '' : 's'}` + (lastMs !== null ? `, last one drawn in ${lastMs} ms.` : '.');
+  }
+
+  // ------------------------------------------------------------------ preview
+  function buildPreview() {
+    for (const mode of ['light', 'dark']) {
+      const col = $('#readme-' + mode);
+      col.replaceChildren();
+      if (!state.widgets.length) {
+        col.append(h('p', { class: 'empty', text: 'No widgets yet. Add one from the list.' }));
+        continue;
+      }
+      state.widgets.forEach((w, i) => {
+        col.append(h('div', { class: 'w', 'data-uid': w.uid, 'data-mode': mode }));
+        if (i === 0) col.append(h('p', { class: 'words', text: WORDS }));
+      });
+    }
+    state.widgets.forEach(paintWidget);
+  }
+  function paintWidget(w) {
+    const c = cache.get(w.uid);
+    const fresh = c && c.key === keyOf(w);
+    const busy = workerReady && pending.has(w.uid);
+    for (const mode of ['light', 'dark']) {
+      const box = document.querySelector(`.w[data-uid="${w.uid}"][data-mode="${mode}"]`);
+      if (!box) continue;
+      let content;
+      if (c && c.result && !c.result.error) {
+        content = h('img', { src: c.urls[mode], alt: c.result.alt || w.id, width: 900, decoding: 'async' });
+      } else if (c && c.result && c.result.error) {
+        content = h('div', { class: 'err', role: 'note' },
+          h('strong', { text: `${w.id} (${w.kind}): ` }), c.result.error);
+      } else {
+        const byTheme = (gallery.prerender || {})[state.theme] || {};
+        const pre = byTheme[`${w.kind}:${w.opts.style}`] || byTheme[w.kind];
+        content = pre && pre[mode]
+          ? h('img', { src: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(pre[mode]), alt: pre.alt || w.id, width: 900 })
+          : h('div', { class: 'ph', text: workerReady ? `drawing ${w.kind}…` : `${w.kind} appears when the renderer is ready` });
+      }
+      const cur = box.firstElementChild;
+      if (cur && cur.tagName === 'IMG' && content.tagName === 'IMG') {
+        if (cur.getAttribute('src') !== content.getAttribute('src')) cur.src = content.src;
+        cur.alt = content.alt;
+      } else {
+        box.replaceChildren(content);
+      }
+      const chip = box.querySelector('.busy');
+      if (busy || (c && !fresh && workerReady)) {
+        if (!chip) box.append(h('span', { class: 'busy', 'aria-hidden': 'true', text: 'drawing…' }));
+      } else if (chip) chip.remove();
+      box.setAttribute('aria-busy', busy ? 'true' : 'false');
+    }
+  }
+
+  // ------------------------------------------------------------------ editor
+  function buildThemes() {
+    const box = $('#themes');
+    box.replaceChildren();
+    for (const t of gallery.themes) {
+      const name = typeof t === 'string' ? t : t.name;
+      const sw = (typeof t === 'object' && t.swatch && t.swatch.light) || {};
+      const colours = sw.paper ? [sw.paper, sw.ink, sw.spot, sw.tint] : (sw.accents || []).slice(0, 4);
+      box.append(h('label', { class: 'theme' },
+        h('input', { type: 'radio', name: 'theme', value: name, checked: name === state.theme }),
+        h('span', { class: 'sw', 'aria-hidden': 'true' }, colours.map((c) => h('i', { style: `background:${c}` }))),
+        h('span', { class: 'name', text: name })));
+    }
+  }
+  $('#themes').addEventListener('change', (e) => {
+    if (e.target.name !== 'theme') return;
+    state.theme = e.target.value;
+    state.widgets.forEach(paintWidget);
+    schedule(0);
+  });
+
+  function buildAdd() {
+    const box = $('#add');
+    box.replaceChildren();
+    for (const kind of kinds()) {
+      const doc = ((specs[kind] || {}).doc || '').split('\n')[0];
+      box.append(h('button', { class: 'btn', type: 'button', 'data-kind': kind, title: doc, 'aria-label': `Add ${kind}: ${doc}` }, `+ ${kind}`));
+    }
+  }
+  function kinds() {
+    return Object.keys(specs).sort((a, b) => (KIND_ORDER.indexOf(a) + 1 || 99) - (KIND_ORDER.indexOf(b) + 1 || 99) || a.localeCompare(b));
+  }
+  $('#add').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-kind]');
+    if (!b) return;
+    const w = newWidget(b.dataset.kind);
+    state.widgets.push(w);
+    openSet.add(w.uid);
+    structural({ uid: w.uid, focus: 'toggle' });
+    announceOut(`Added ${w.kind} “${w.id}” at the end.`);
+  });
+
+  function buildList(focus) {
+    const list = $('#widgets');
+    list.replaceChildren();
+    state.widgets.forEach((w, i) => list.append(card(w, i)));
+    $('#count').textContent = `(${state.widgets.length})`;
+    if (focus) {
+      const li = list.querySelector(`[data-uid="${focus.uid}"]`);
+      let el = li && li.querySelector(focus.focus === 'toggle' ? '.wtoggle' : `[data-act="${focus.focus}"]`);
+      if (el && el.disabled) el = li.querySelector('.wtoggle');
+      if (!el && focus.fallback) el = focus.fallback();
+      if (el) el.focus();
+    }
+  }
+  function card(w, i) {
+    const open = openSet.has(w.uid);
+    const n = state.widgets.length;
+    const name = `${w.kind} “${w.id}”`;
+    const li = h('li', { class: 'wcard' + (open ? ' open' : ''), 'data-uid': w.uid },
+      h('div', { class: 'whead' },
+        h('button', { class: 'wtoggle', type: 'button', 'aria-expanded': open ? 'true' : 'false', 'aria-controls': 'wb-' + w.uid, 'data-act': 'toggle', 'aria-label': `${i + 1}. ${name} options` },
+          h('span', { class: 'wnum', 'aria-hidden': 'true', text: String(i + 1) }),
+          h('span', { class: 'wkind', text: w.kind }),
+          h('span', { class: 'wid', id: 'wi-' + w.uid, text: w.id }),
+          h('span', { class: 'wstate', id: 'ws-' + w.uid }),
+          h('span', { class: 'caret', 'aria-hidden': 'true' })),
+        h('button', { class: 'icon', type: 'button', 'data-act': 'up', disabled: i === 0, 'aria-label': `Move ${name} up`, title: 'Move up', text: '↑' }),
+        h('button', { class: 'icon', type: 'button', 'data-act': 'down', disabled: i === n - 1, 'aria-label': `Move ${name} down`, title: 'Move down', text: '↓' }),
+        h('button', { class: 'icon', type: 'button', 'data-act': 'remove', 'aria-label': `Remove ${name}`, title: 'Remove', text: '✕' })),
+      h('div', { class: 'wbody', id: 'wb-' + w.uid, hidden: !open }, open ? form(w) : null));
+    paintCardState(li, w);
+    return li;
+  }
+  function form(w) {
+    const spec = specs[w.kind] || { defaults: {}, doc: '' };
+    const dh = docHints(spec.doc);
+    const fid = (k) => `f-${w.uid}-${k}`;
+    const field = (key, def) => {
+      const type = fieldType(w.kind, key, def);
+      const v = w.opts[key];
+      const hint = HINTS[`${w.kind}.${key}`] || dh[key] || '';
+      const hid = hint ? fid(key) + '-h' : null;
+      const common = { id: fid(key), 'data-key': key, 'data-type': type, 'aria-describedby': hid };
+      let input;
+      if (type === 'bool') {
+        return h('div', { class: 'field' },
+          h('label', { class: 'switch', for: fid(key) },
+            h('input', Object.assign({ type: 'checkbox', role: 'switch', checked: !!v }, common)),
+            h('span', { class: 'track', 'aria-hidden': 'true' }),
+            h('span', { class: 'label', text: key.replace(/_/g, ' ') })),
+          hint ? h('p', { class: 'hint', id: hid, text: hint }) : null);
+      }
+      if (type === 'select') {
+        const choices = CHOICES[`${w.kind}.${key}`].slice();
+        if (v && !choices.includes(v)) choices.push(v);
+        input = h('select', common, choices.map((c) => h('option', { value: c, selected: c === v, text: c })));
+      } else if (type === 'lines') {
+        input = h('textarea', Object.assign({ rows: 2, spellcheck: 'false' }, common));
+        input.value = showValue(type, v);
+      } else {
+        const attrs = Object.assign({ type: type === 'number' ? 'number' : 'text', spellcheck: 'false', autocomplete: 'off' }, common);
+        if (type === 'number') { attrs.step = Number.isInteger(def) ? '1' : 'any'; attrs.inputmode = 'decimal'; }
+        if (type === 'loose' || type === 'list') attrs.placeholder = def === 'auto' ? 'auto' : (type === 'list' ? '' : 'automatic');
+        input = h('input', attrs);
+        input.value = showValue(type, v);
+      }
+      if (NUMERIC_LISTS.has(`${w.kind}.${key}`)) input.dataset.numericList = '1';
+      return h('div', { class: 'field' },
+        h('label', { class: 'label', for: fid(key), text: key.replace(/_/g, ' ') }), input,
+        hint ? h('p', { class: 'hint', id: hid, text: hint }) : null);
+    };
+
+    const adv = new Set(ADVANCED[w.kind] || []);
+    const main = [], more = [];
+    for (const [k, d] of Object.entries(spec.defaults || {})) (adv.has(k) ? more : main).push(field(k, d));
+    const extras = Object.entries(EXTRAS[w.kind] || {}).map(([k, d]) => field(k, d));
+    const doc = (spec.doc || '').split('\n')[0];
+    return [
+      doc ? h('p', { class: 'wdoc', text: doc }) : null,
+      h('div', { class: 'field' },
+        h('label', { class: 'label', for: fid('_id'), text: 'id (README marker)' }),
+        h('input', { id: fid('_id'), type: 'text', 'data-key': '_id', value: w.id, spellcheck: 'false', autocomplete: 'off', 'aria-describedby': fid('_id') + '-h' }),
+        h('p', { class: 'hint', id: fid('_id') + '-h', text: 'Letters, digits, - and _. Used for file names and <!-- pernik:id -->.' })),
+      main,
+      extras.length ? h('details', {}, h('summary', { text: `${KOMIK_ONLY}: more options` }), extras) : null,
+      more.length ? h('details', {}, h('summary', { text: 'Advanced' }), more) : null,
+      h('ul', { class: 'wlogs', id: 'wl-' + w.uid, hidden: true, 'aria-label': `Notes from ${w.id}` }),
+      h('p', { class: 'wfiles', id: 'wf-' + w.uid }),
+    ].flat().filter(Boolean);
+  }
+  function paintCardState(li, w) {
+    const c = cache.get(w.uid);
+    const st = li.querySelector('.wstate');
+    const fresh = c && c.key === keyOf(w);
+    st.classList.toggle('bad', !!(c && c.result.error));
+    st.textContent = !workerReady ? '' : (pending.has(w.uid) || !fresh) ? 'drawing…'
+      : c.result.error ? 'problem' : `${Math.ceil(Math.max(...c.result.bytes) / 1024)} KB`;
+    const logs = li.querySelector('.wlogs');
+    if (logs) {
+      const lines = c ? [...(c.result.error ? [c.result.error] : []), ...(c.result.logs || [])] : [];
+      logs.replaceChildren(...lines.map((t) => h('li', { text: t })));
+      logs.hidden = !lines.length;
+    }
+    const files = li.querySelector('.wfiles');
+    if (files) {
+      files.replaceChildren();
+      if (c && !c.result.error) {
+        const list = c.result.same ? [['', c.urls.light]] : [['-light', c.urls.light], ['-dark', c.urls.dark]];
+        files.append('Download: ', ...list.map(([suffix, url]) => h('a', { href: url, download: `${w.id}${suffix}.svg`, text: `${w.id}${suffix}.svg` })));
+      }
+    }
+  }
+  function paintCard(w) {
+    const li = document.querySelector(`.wcard[data-uid="${w.uid}"]`);
+    if (li) paintCardState(li, w);
+  }
+
+  $('#widgets').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-act]');
+    if (!b) return;
+    const li = b.closest('[data-uid]');
+    const i = state.widgets.findIndex((w) => w.uid === li.dataset.uid);
+    const w = state.widgets[i];
+    const act = b.dataset.act;
+    if (act === 'toggle') {
+      if (openSet.has(w.uid)) openSet.delete(w.uid); else openSet.add(w.uid);
+      const open = openSet.has(w.uid);
+      li.classList.toggle('open', open);
+      b.setAttribute('aria-expanded', String(open));
+      const body = li.querySelector('.wbody');
+      body.hidden = !open;
+      if (open && !body.childElementCount) { body.append(...form(w)); paintCardState(li, w); }
+      return;
+    }
+    if (act === 'up' || act === 'down') {
+      const j = act === 'up' ? i - 1 : i + 1;
+      if (j < 0 || j >= state.widgets.length) return;
+      [state.widgets[i], state.widgets[j]] = [state.widgets[j], state.widgets[i]];
+      structural({ uid: w.uid, focus: act });
+      announceOut(`Moved ${w.kind} “${w.id}” to position ${j + 1} of ${state.widgets.length}.`);
+    } else if (act === 'remove') {
+      state.widgets.splice(i, 1);
+      openSet.delete(w.uid);
+      const c = cache.get(w.uid);
+      if (c) revoke(c);
+      cache.delete(w.uid);
+      pending.delete(w.uid);
+      const next = state.widgets[Math.min(i, state.widgets.length - 1)];
+      structural(next ? { uid: next.uid, focus: 'toggle' } : { fallback: () => $('#add .btn') });
+      announceOut(`Removed ${w.kind} “${w.id}”.`);
+    }
+  });
+
+  function onFieldInput(e) {
+    const el = e.target;
+    const key = el.dataset && el.dataset.key;
+    if (!key) return;
+    const li = el.closest('[data-uid]');
+    const w = state.widgets.find((x) => x.uid === li.dataset.uid);
+    if (!w) return;
+    if (key === '_id') {
+      const v = el.value.trim();
+      const ok = ID_RE.test(v) && !state.widgets.some((x) => x !== w && x.id === v);
+      el.setAttribute('aria-invalid', ok ? 'false' : 'true');
+      const hint = document.getElementById(el.id + '-h');
+      hint.textContent = ok ? 'Letters, digits, - and _. Used for file names and <!-- pernik:id -->.'
+        : (ID_RE.test(v) ? `Another widget already uses “${v}”.` : 'Only letters, digits, - and _ (no spaces).');
+      if (!ok) return;
+      w.id = v;
+      $('#wi-' + w.uid).textContent = v;
+      li.querySelectorAll('.whead [aria-label]').forEach((b) => {
+        b.setAttribute('aria-label', b.getAttribute('aria-label').replace(/“.*”/, `“${v}”`));
+      });
+    } else {
+      const type = el.dataset.type;
+      const def = baseDefaults(w.kind)[key];
+      const raw = type === 'bool' ? el.checked : el.value;
+      w.opts[key] = parseValue(type, raw, def, el.dataset.numericList === '1');
+    }
+    const instant = el.tagName === 'SELECT' || el.type === 'checkbox';
+    schedule(instant ? 30 : 300);
+  }
+  $('#widgets').addEventListener('input', onFieldInput);
+  $('#widgets').addEventListener('change', (e) => { if (e.target.tagName === 'SELECT' || e.target.type === 'checkbox') return; onFieldInput(e); });
+
+  $('#user').addEventListener('input', (e) => {
+    const v = e.target.value.trim();
+    const ok = v === '' || USER_RE.test(v);
+    e.target.setAttribute('aria-invalid', ok ? 'false' : 'true');
+    $('#user-hint').textContent = ok ? 'Shown as @name and used to seed your batik pattern.'
+      : 'GitHub usernames use letters, digits and single hyphens (up to 39).';
+    if (!ok) return;
+    state.user = v || 'octocat';
+    schedule(400);
+  });
+
+  function structural(focus) {
+    buildList(focus);
+    buildPreview();
+    schedule(30);
+  }
+
+  // ------------------------------------------------------------------ outputs
+  function tomlValue(v) {
+    if (Array.isArray(v)) return '[' + v.map(tomlValue).join(', ') + ']';
+    if (typeof v === 'boolean') return v ? 'true' : 'false';
+    if (typeof v === 'number') return Number.isFinite(v) ? String(v) : '0';
+    return JSON.stringify(String(v)).replace(/\u007f/g, '\\u007F');
+  }
+  function tomlText() {
+    const out = [
+      '# Pernik settings, made in the playground. Every option: python3 -m pernik list',
+      'schema = 1',
+      `theme = ${tomlValue(state.theme)}`,
+      'output = "pernik"',
+      `# user = ${tomlValue(state.user)}   # found automatically in the GitHub Action`,
+    ];
+    for (const w of state.widgets) {
+      out.push('');
+      if (w.kind === 'mixtape') out.push('# put your own song in the repo and point song at it (only songs you have the rights to)');
+      out.push('[[widget]]', `id = ${tomlValue(w.id)}`, `kind = ${tomlValue(w.kind)}`);
+      for (const [k, v] of Object.entries(clean(w))) out.push(`${k} = ${tomlValue(v)}`);
+    }
+    return out.join('\n') + '\n';
+  }
+  function readmeText() {
+    const parts = [];
+    state.widgets.forEach((w, i) => {
+      parts.push(`<!-- pernik:${w.id} -->\n<!-- /pernik:${w.id} -->`);
+      if (i === 0) parts.push(WORDS);
+    });
+    return parts.join('\n\n') + '\n';
+  }
+  function refreshOutputs() {
+    $('#out-toml').textContent = tomlText();
+    $('#out-readme').textContent = readmeText();
+    $('#out-workflow').textContent = WORKFLOW;
+    saveHashSoon();
+  }
+
+  // tabs (arrow keys move between them)
+  const tabs = [...document.querySelectorAll('[role="tab"]')];
+  function selectTab(tab, focus) {
+    for (const t of tabs) {
+      const on = t === tab;
+      t.setAttribute('aria-selected', String(on));
+      t.tabIndex = on ? 0 : -1;
+      document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
+    }
+    if (focus) tab.focus();
+  }
+  tabs.forEach((t, i) => {
+    t.addEventListener('click', () => selectTab(t));
+    t.addEventListener('keydown', (e) => {
+      const n = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }[e.key];
+      if (n === undefined) return;
+      e.preventDefault();
+      selectTab(tabs[(n + tabs.length) % tabs.length], true);
+    });
+  });
+
+  function announceOut(text) { $('#out-status').textContent = text; }
+  async function copy(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (_) {
+      const ta = h('textarea', { 'aria-hidden': 'true', style: 'position:fixed;left:-9999px;top:0' });
+      ta.value = text;
+      document.body.append(ta);
+      ta.select();
+      let ok = false;
+      try { ok = document.execCommand('copy'); } catch (_) { ok = false; }
+      ta.remove();
+      return ok;
+    }
+  }
+  document.querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', async () => {
+    const pre = document.getElementById(b.dataset.copy);
+    const ok = await copy(pre.textContent);
+    const what = pre.getAttribute('aria-label');
+    announceOut(ok ? `Copied ${what}.` : `Couldn’t copy ${what}; select the text and copy it by hand.`);
+    b.textContent = ok ? 'Copied' : 'Copy failed';
+    setTimeout(() => { b.textContent = 'Copy'; }, 1600);
+  }));
+
+  $('#download').addEventListener('click', () => {
+    if (!workerReady) return;
+    $('#download').disabled = true;
+    announceOut('Building every widget with pernik build and pernik check…');
+    worker.postMessage({ type: 'zip', toml: tomlText(), readme: readmeText(), user: state.user });
+  });
+  function onZip(m) {
+    $('#download').disabled = false;
+    if (m.error) { announceOut(`The build failed: ${m.error}`); return; }
+    const url = URL.createObjectURL(new Blob([m.bytes], { type: 'application/zip' }));
+    const a = h('a', { href: url, download: `pernik-${state.user}.zip` });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    const p = (m.info && m.info.problems) || [];
+    announceOut(`Downloaded pernik-${state.user}.zip (${m.info ? m.info.files : '?'} widgets)` +
+      (p.length ? `, with ${p.length} problem(s): see pernik-problems.txt inside.` : '; pernik check passed.'));
+  }
+
+  // ------------------------------------------------------------------ share links
+  const b64 = {
+    enc(bytes) {
+      let s = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    },
+    dec(str) {
+      const s = atob(str.replace(/-/g, '+').replace(/_/g, '/'));
+      return Uint8Array.from(s, (c) => c.charCodeAt(0));
+    },
+  };
+  const canZip = typeof CompressionStream === 'function' && typeof DecompressionStream === 'function';
+  async function pipe(bytes, stream) {
+    return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer());
+  }
+  async function encodeState() {
+    const json = JSON.stringify({ v: 1, u: state.user, t: state.theme, w: state.widgets.map((w) => [w.id, w.kind, clean(w)]) });
+    const raw = new TextEncoder().encode(json);
+    if (canZip) {
+      try { return 'z=' + b64.enc(await pipe(raw, new CompressionStream('deflate-raw'))); } catch (_) { /* fall through */ }
+    }
+    return 'j=' + b64.enc(raw);
+  }
+  async function decodeState(hash) {
+    const m = hash.replace(/^#/, '').match(/^([zj])=([A-Za-z0-9_-]+)$/);
+    if (!m) return null;
+    let bytes = b64.dec(m[2]);
+    if (m[1] === 'z') {
+      if (!canZip) throw new Error('this browser can’t unpack the link');
+      bytes = await pipe(bytes, new DecompressionStream('deflate-raw'));
+    }
+    const d = JSON.parse(new TextDecoder().decode(bytes));
+    if (!d || d.v !== 1 || !Array.isArray(d.w)) throw new Error('not a playground link');
+    const taken = [];
+    const widgets = [];
+    for (const [id, kind, opts] of d.w.slice(0, 40)) {
+      if (!specs[kind]) continue;
+      const wid = ID_RE.test(String(id)) && !taken.includes(String(id)) ? String(id) : freeId(kind, taken);
+      taken.push(wid);
+      const w = newWidget(kind, wid);
+      w.opts = Object.assign(baseDefaults(kind), opts && typeof opts === 'object' ? opts : {});
+      widgets.push(w);
+    }
+    return { user: USER_RE.test(d.u || '') ? d.u : 'octocat', theme: String(d.t || 'komik'), widgets };
+  }
+  let hashTimer = null;
+  function saveHashSoon() {
+    clearTimeout(hashTimer);
+    hashTimer = setTimeout(async () => {
+      const hash = '#' + await encodeState();
+      if (location.hash !== hash) history.replaceState(null, '', hash);
+    }, 600);
+  }
+  $('#share').addEventListener('click', async () => {
+    const url = location.href.split('#')[0] + '#' + await encodeState();
+    history.replaceState(null, '', url);
+    const ok = await copy(url);
+    announceOut(ok ? 'Share link copied. It holds your whole design.' : 'Couldn’t copy; the link is in the address bar.');
+  });
+  $('#reset').addEventListener('click', () => {
+    loadState(defaultState());
+    openSet.clear();
+    if (state.widgets[0]) openSet.add(state.widgets[0].uid);
+    rebuildAll();
+    announceOut('Back to the starter profile.');
+  });
+
+  // ------------------------------------------------------------------ page chrome
+  function applyPageTheme(v) {
+    if (v === 'light' || v === 'dark') document.documentElement.dataset.theme = v;
+    else delete document.documentElement.dataset.theme;
+  }
+  const savedPage = store.get('page') || 'auto';
+  applyPageTheme(savedPage);
+  document.querySelectorAll('input[name="page-theme"]').forEach((r) => {
+    r.checked = r.value === savedPage;
+    r.addEventListener('change', () => { applyPageTheme(r.value); store.set('page', r.value); });
+  });
+  const savedView = store.get('view') || 'both';
+  document.querySelectorAll('input[name="view"]').forEach((r) => {
+    r.checked = r.value === savedView;
+    r.addEventListener('change', () => { $('#pages').dataset.view = r.value; store.set('view', r.value); });
+  });
+  $('#pages').dataset.view = savedView;
+
+  // ------------------------------------------------------------------ start
+  function defaultState() {
+    return {
+      user: 'octocat',
+      theme: 'komik',
+      widgets: [
+        newWidget('hero', 'hello'),
+        newWidget('divider', 'line', { style: 'kawung' }),
+        newWidget('heading', 'stack-title'),
+        newWidget('stack', 'stack'),
+        newWidget('footer', 'bye'),
+      ].filter((w) => specs[w.kind]),
+    };
+  }
+  function loadState(s) {
+    for (const c of cache.values()) revoke(c);
+    cache.clear();
+    pending.clear();
+    state.user = s.user;
+    state.theme = s.theme;
+    state.widgets = s.widgets;
+  }
+  function rebuildAll() {
+    $('#user').value = state.user;
+    buildThemes();
+    buildAdd();
+    buildList();
+    buildPreview();
+    refreshOutputs();
+    flush();
+  }
+
+  async function start() {
+    try {
+      const r = await fetch('gallery.json');
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      gallery = await r.json();
+    } catch (err) {
+      setLoading(`Couldn’t load gallery.json (${err.message}); waiting for the renderer instead.`);
+    }
+    gallery.themes = gallery.themes || [];
+    if (!gallery.themes.length) gallery.themes = ['komik'];
+    specs = gallery.widgets || {};
+    if (!Object.keys(specs).length) {      // no gallery: still offer the built-in kinds
+      for (const k of KIND_ORDER) specs[k] = { defaults: {}, doc: '' };
+    }
+    let s = null;
+    if (location.hash.length > 1) {
+      try { s = await decodeState(location.hash); } catch (err) {
+        announceOut(`Couldn’t read the shared link (${err.message}); starting fresh.`);
+      }
+    }
+    loadState(s || defaultState());
+    if (state.widgets[0]) openSet.add(state.widgets[0].uid);
+    rebuildAll();
+  }
+  start();
+})();

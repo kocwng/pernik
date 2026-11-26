@@ -7,6 +7,8 @@
 - **Yours.** Patterns are generated from your username, so your batik doesn't look like anyone else's. Themes change every colour at once.
 - **README-safe.** No scripts and no outside files, just CSS animation. `pernik check` makes sure of it.
 
+**Try it in your browser:** [kocwng.github.io/pernik](https://kocwng.github.io/pernik/) opens the playground, where Pernik runs right in the page. Nothing to install.
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/example-dark.png" />
   <img src="docs/example.png" width="600" alt="An example profile made with Pernik: a hero card with a banana playing ukulele, a kawung batik divider, numbered section headings, a grid of tech-stack panels, a cassette tape player and a thank-you caption bar, all in pink and black ink on paper." />
@@ -141,6 +143,14 @@ Widgets are small Python functions. See [CONTRIBUTING.md](CONTRIBUTING.md) to ad
 | `python3 -m pernik check` | Build, then check every file is safe and small enough for GitHub |
 | `python3 -m pernik list` | Every widget and its options |
 | `python3 -m pernik init` | A starter `pernik.toml`, `README.md` and workflow |
+
+**Playground:** to run the browser playground on your own computer, build the site and serve it:
+
+```bash
+python3 tools/build_site.py && python3 -m http.server -d site 8000
+```
+
+Then open http://localhost:8000.
 
 ## License
 

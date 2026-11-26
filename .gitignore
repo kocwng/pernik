@@ -5,3 +5,4 @@ dist/
 .pernik-cache/
 /examples/profile/pernik/preview.html
 *.mp4
+site/

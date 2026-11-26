@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pernik playground</title>
+<meta name="description" content="Try Pernik's GitHub profile widgets live in your browser, then copy the pernik.toml.">
+<meta name="color-scheme" content="light dark">
+<link rel="stylesheet" href="style.css">
+<link rel="preload" href="gallery.json" as="fetch" crossorigin>
+<script src="app.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#preview-title">Skip to the preview</a>
+
+<header class="masthead">
+  <div class="masthead-in">
+    <p class="kicker mono">No.01 · playground</p>
+    <h1 class="display"><span class="print" data-text="Pernik">Pernik</span></h1>
+    <p class="tagline">Small ornaments for your GitHub profile. Try every widget here, then copy the <code>pernik.toml</code>.</p>
+    <fieldset class="seg seg-page" aria-describedby="page-hint">
+      <legend class="label">Page</legend>
+      <label><input type="radio" name="page-theme" value="auto" checked><span>auto</span></label>
+      <label><input type="radio" name="page-theme" value="light"><span>day</span></label>
+      <label><input type="radio" name="page-theme" value="dark"><span>night</span></label>
+    </fieldset>
+    <p id="page-hint" class="sr-only">Colours of this page. Auto follows your system.</p>
+  </div>
+</header>
+
+<main class="layout">
+  <section class="panel editor" aria-labelledby="editor-title">
+    <h2 id="editor-title" class="label bar">Your profile</h2>
+
+    <div class="field">
+      <label for="user" class="label">GitHub username</label>
+      <input id="user" type="text" autocomplete="username" spellcheck="false" autocapitalize="off"
+             inputmode="text" maxlength="39" aria-describedby="user-hint">
+      <p id="user-hint" class="hint">Shown as @name and used to seed your batik pattern.</p>
+    </div>
+
+    <fieldset class="themes">
+      <legend class="label">Theme</legend>
+      <div id="themes" class="theme-grid"></div>
+    </fieldset>
+
+    <h3 class="label sub">Widgets <span class="mono count" id="count"></span></h3>
+    <ol id="widgets" class="widget-list"></ol>
+
+    <div class="add">
+      <h3 class="label sub" id="add-title">Add a widget</h3>
+      <div id="add" class="add-grid" role="group" aria-labelledby="add-title"></div>
+    </div>
+  </section>
+
+  <div class="right">
+    <section class="panel preview" aria-labelledby="preview-title">
+      <div class="preview-head">
+        <h2 id="preview-title" class="label bar" tabindex="-1">Preview</h2>
+        <fieldset class="seg">
+          <legend class="sr-only">Show GitHub's</legend>
+          <label><input type="radio" name="view" value="light"><span>light</span></label>
+          <label><input type="radio" name="view" value="dark"><span>dark</span></label>
+          <label><input type="radio" name="view" value="both" checked><span>both</span></label>
+        </fieldset>
+      </div>
+      <div id="loading" class="loading" role="status" aria-live="polite">
+        <span class="dots" aria-hidden="true"></span>
+        <span id="loading-text">Loading the renderer… about 12 MB, first time only. Showing the default looks meanwhile.</span>
+      </div>
+      <p id="status" class="status mono" role="status" aria-live="polite"></p>
+      <div id="pages" class="pages" data-view="both">
+        <div class="gh gh-light" role="region" aria-label="README on GitHub's light theme">
+          <p class="gh-cap mono">GitHub light</p>
+          <article class="readme" id="readme-light"></article>
+        </div>
+        <div class="gh gh-dark" role="region" aria-label="README on GitHub's dark theme">
+          <p class="gh-cap mono">GitHub dark</p>
+          <article class="readme" id="readme-dark"></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel output" aria-labelledby="output-title">
+      <h2 id="output-title" class="label bar">Take it home</h2>
+      <div class="tabs" role="tablist" aria-label="Files to copy">
+        <button role="tab" id="tab-toml" aria-controls="pane-toml" aria-selected="true">pernik.toml</button>
+        <button role="tab" id="tab-readme" aria-controls="pane-readme" aria-selected="false" tabindex="-1">README.md</button>
+        <button role="tab" id="tab-workflow" aria-controls="pane-workflow" aria-selected="false" tabindex="-1">workflow</button>
+      </div>
+      <div role="tabpanel" id="pane-toml" aria-labelledby="tab-toml" class="pane">
+        <p class="hint">Put this in the repo named after your username.</p>
+        <div class="code"><button class="btn copy" data-copy="out-toml" aria-label="Copy pernik.toml">Copy</button><pre id="out-toml" tabindex="0" aria-label="pernik.toml"></pre></div>
+      </div>
+      <div role="tabpanel" id="pane-readme" aria-labelledby="tab-readme" class="pane" hidden>
+        <p class="hint">Pernik fills in what sits between each pair of markers and leaves your own words alone.</p>
+        <div class="code"><button class="btn copy" data-copy="out-readme" aria-label="Copy README.md">Copy</button><pre id="out-readme" tabindex="0" aria-label="README.md"></pre></div>
+      </div>
+      <div role="tabpanel" id="pane-workflow" aria-labelledby="tab-workflow" class="pane" hidden>
+        <p class="hint">Save as <code>.github/workflows/pernik.yml</code>, then <em>Settings → Actions → General → Workflow permissions → Read and write</em>.</p>
+        <div class="code"><button class="btn copy" data-copy="out-workflow" aria-label="Copy the workflow">Copy</button><pre id="out-workflow" tabindex="0" aria-label="workflow file"></pre></div>
+      </div>
+      <div class="actions">
+        <button class="btn solid" id="download" disabled>Download SVGs (.zip)</button>
+        <button class="btn" id="share">Copy share link</button>
+        <button class="btn" id="reset">Start over</button>
+      </div>
+      <p id="out-status" class="hint mono" role="status" aria-live="polite"></p>
+    </section>
+  </div>
+</main>
+
+<footer class="foot">
+  <p class="mono">Everything runs in your browser: <span id="engine">Pernik + Pyodide</span>. Logos from <a href="https://simpleicons.org">Simple Icons</a>. <a href="https://github.com/kocwng/pernik">Pernik on GitHub</a> · <em>tamat</em>.</p>
+</footer>
+</body>
+</html>
