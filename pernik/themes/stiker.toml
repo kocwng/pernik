@@ -1,6 +1,6 @@
-# The default Pernik theme: playful stickers with cream outlines and a soft ink shadow.
+# The "stiker" theme: playful stickers with cream outlines and a soft ink shadow.
 # Every widget reads its colours from here, so swapping this file restyles the whole profile.
-name = "pernik"
+name = "stiker"
 schema = 1
 
 # Bright colours used for letters, stripes, bars and shapes, in this order.

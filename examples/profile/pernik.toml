@@ -2,7 +2,7 @@
 # Build it with:  python3 -m pernik preview examples/profile/pernik.toml
 schema = 1
 user = "octocat"
-theme = "pernik"
+theme = "komik"
 output = "pernik"
 
 [[widget]]
@@ -11,6 +11,7 @@ kind = "hero"
 greeting = ["hello", "there!"]
 mascot = "banana"
 chords = "docs/tape/chords.json"
+tagline = "keep going"
 
 [[widget]]
 id = "line-kawung"
@@ -21,28 +22,19 @@ style = "kawung"
 id = "about-title"
 kind = "heading"
 text = "about me"
-color = "langit"
-
-[[widget]]
-id = "line-wave"
-kind = "divider"
-style = "wave"
+number = 1
 
 [[widget]]
 id = "stack-title"
 kind = "heading"
 text = "tech stack"
-color = "pink"
+number = 2
+note = "things I use"
 
 [[widget]]
 id = "stack"
 kind = "stack"
 icons = ["python", "go", "docker", "postgresql", "git", "figma"]
-
-[[widget]]
-id = "line-truntum"
-kind = "divider"
-style = "truntum"
 
 [[widget]]
 id = "tape"

@@ -7,16 +7,23 @@
 <title>tape</title>
 <meta name="description" content="A short recording, played on a cassette tape.">
 <style>
+  /* Two looks, chosen by "style" in tape.json: the sticker look (below) and the komik look
+     (html.komik, further down: a two-colour comic page, rules in pernik's docs/design.md). */
   :root {
     --krem: #FFF6E5; --tinta: #2B2340; --jeruk: #FF8A3D; --pink: #FF5FA2;
     --kuning: #FFD23F; --mint: #3DDC97; --langit: #4CC9F0; --anggur: #7B5CFF;
     --bg: var(--krem); --fg: var(--tinta); --dot: #2B234014; --shadow: #2B234059;
     --round: 'Arial Rounded MT Bold', 'Nunito', 'Varela Round', 'Trebuchet MS', 'Segoe UI', sans-serif;
     --body: 'Segoe UI', Ubuntu, 'Helvetica Neue', sans-serif;
+    --paper: #FAF3F8; --ink: #1C1520; --spot: #E0569B; --tint: #F4BCD8;
+    --display: 'Arial Rounded MT Bold', 'Nunito', 'Varela Round', sans-serif;
+    --label: 'Arial Black', 'Helvetica Neue', Arial, sans-serif;
+    --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   }
   @media (prefers-color-scheme: dark) {
     :root { --bg: #1d1730; --fg: var(--krem); --dot: #FFF6E512; --shadow: #00000080; }
   }
+  html:not(.ready) main { visibility: hidden; }
   * { box-sizing: border-box; }
   html, body { margin: 0; }
   body {
@@ -47,6 +54,7 @@
   .track { flex: 1; text-align: left; color: var(--krem); min-width: 0; }
   .track .t { font-size: 20px; }
   input[type=range] { width: 100%; margin: 6px 0 0; accent-color: var(--kuning); }
+  .seek .tab, .seek .fill { display: none; }
   .time { font: 13px ui-monospace, Menlo, monospace; opacity: .85; }
   button:focus-visible, input:focus-visible { outline: 4px solid var(--kuning); outline-offset: 4px; }
 
@@ -54,6 +62,7 @@
     color: var(--tinta); border: 4px solid var(--tinta); border-radius: 20px; box-shadow: 4px 5px 0 var(--shadow);
     transform: rotate(5deg); z-index: 2; }
   .chord[hidden] { display: none; }
+  .chord .tag { display: none; }
   .chord .name { font-size: 30px; line-height: 1; margin-bottom: 4px; }
   .chord svg { width: 72px; height: 80px; display: block; margin: 0 auto; }
   .chord.pop { animation: pop .35s cubic-bezier(.5,-0.4,.5,1.6); }
@@ -66,14 +75,144 @@
   a { color: var(--anggur); font-weight: 600; }
   @media (prefers-color-scheme: dark) { a { color: var(--langit); } }
   @media (prefers-reduced-motion: reduce) { h1 span, .chord.pop { animation: none; } .viz i { transition: none; } }
+
+  /* ------------------------------------------------------------------ komik look
+     4 colours (paper, ink, spot, tint), 3 lines (4 / 2.5 / 1.5 px), the 8 grid,
+     3 type roles (display: the chord name; label: title bar, tabs; mono: small UI text). */
+  html.komik body {
+    background: radial-gradient(var(--tint) 1.1px, transparent 1.6px) 0 0 / 8px 8px,
+                radial-gradient(var(--tint) 1.1px, transparent 1.6px) 4px 4px / 8px 8px, var(--paper);
+    color: var(--ink); font: 14px/1.5 var(--mono);
+  }
+  @media (prefers-color-scheme: dark) {
+    html.komik body {
+      background: radial-gradient(color-mix(in srgb, var(--spot) 22%, var(--ink)) 1.1px, transparent 1.6px) 0 0 / 8px 8px,
+                  radial-gradient(color-mix(in srgb, var(--spot) 22%, var(--ink)) 1.1px, transparent 1.6px) 4px 4px / 8px 8px, var(--ink);
+    }
+  }
+  html.komik main {
+    width: min(720px, 100%); text-align: left; background: var(--paper); color: var(--ink);
+    border: 4px solid var(--ink); border-radius: 6px; padding: 24px;
+    box-shadow: 0 0 0 4px var(--paper);        /* the paper margin outside the frame, as on the card */
+  }
+  html.komik .lbl { font-family: var(--label); font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
+  html.komik .mono { font-family: var(--mono); font-weight: 600; }
+
+  html.komik h1 {
+    font: 900 clamp(20px, 5vw, 32px)/1 var(--label); text-transform: uppercase; letter-spacing: .04em;
+    background: var(--ink); color: var(--paper); border-radius: 2px; padding: 12px 16px; margin: 0 0 16px;
+  }
+
+  html.komik .deck {
+    display: grid; grid-template-columns: 1fr 160px; grid-template-areas: "viz chord" "ctrl ctrl";
+    gap: 16px; background: none; border: 0; border-radius: 0; box-shadow: none; padding: 0; margin: 0;
+  }
+  html.komik .deck.nochord { grid-template-columns: 1fr; grid-template-areas: "viz" "ctrl"; }
+
+  html.komik .viz {
+    grid-area: viz; height: auto; min-height: 216px; gap: 8px; padding: 24px 16px 0; overflow: hidden;
+    border: 4px solid var(--ink); border-radius: 6px;
+    background: radial-gradient(var(--tint) 1.1px, transparent 1.6px) 0 0 / 6px 6px,
+                radial-gradient(var(--tint) 1.1px, transparent 1.6px) 3px 3px / 6px 6px, var(--paper);
+  }
+  html.komik .viz i {
+    max-width: 32px; min-height: 16px; height: 16px; border: 2.5px solid var(--ink); border-bottom: 0;
+    border-radius: 2px 2px 0 0;
+    background: radial-gradient(var(--spot) 1.5px, transparent 2px) 0 0 / 6px 6px,
+                radial-gradient(var(--spot) 1.5px, transparent 2px) 3px 3px / 6px 6px, var(--tint);
+  }
+
+  html.komik .chord {
+    grid-area: chord; position: relative; inset: auto; width: auto; transform: none; box-shadow: none;
+    background: var(--paper); color: var(--ink); border: 4px solid var(--ink); border-radius: 6px;
+    padding: 40px 12px 12px; text-align: center; display: flex; flex-direction: column; align-items: center;
+  }
+  html.komik .chord[hidden] { display: none; }
+  html.komik .chord .tag {
+    display: block; position: absolute; left: 0; top: 0; background: var(--ink); color: var(--paper);
+    font-size: 11px; line-height: 1; padding: 6px 8px 5px; border-radius: 0 0 2px 0;
+  }
+  html.komik .chord .name {
+    font: 800 48px/1 var(--display); color: var(--spot); margin: 0 0 8px;
+    -webkit-text-stroke: 2.5px var(--ink); paint-order: stroke fill; text-shadow: 4px 4px 0 var(--ink);
+  }
+  html.komik .chord svg { width: 88px; height: 96px; }
+  html.komik .chord .next { font: 600 13px/1 var(--mono); opacity: 1; margin-top: 8px; }
+  html.komik .chord.pop { animation: stamp .35s cubic-bezier(.3,1.4,.5,1); }
+  @keyframes stamp { 0% { transform: scale(.9); } 70% { transform: scale(1.03); } 100% { transform: scale(1); } }
+
+  html.komik .ctrl {
+    grid-area: ctrl; margin: 0; gap: 16px; padding: 16px; border: 4px solid var(--ink); border-radius: 6px;
+    background: var(--paper);
+  }
+  html.komik button.play {
+    width: 64px; height: 64px; border-radius: 6px; border: 2.5px solid var(--ink); background: var(--tint);
+    color: var(--ink); box-shadow: none; transition: transform .12s ease-out, box-shadow .12s ease-out;
+  }
+  html.komik button.play:hover { transform: translate(-2px, -2px); box-shadow: 4px 4px 0 var(--ink); }
+  html.komik button.play:active { transform: translate(2px, 2px); box-shadow: none; }
+  html.komik button.play svg { width: 28px; height: 28px; }
+  html.komik .track {
+    color: var(--ink); display: grid; grid-template-columns: 1fr auto; grid-template-areas: "side time" "seek seek";
+    gap: 8px 16px; align-items: baseline;
+  }
+  html.komik .track .t { grid-area: side; font: 600 14px/1 var(--mono); text-transform: uppercase; }
+  html.komik .time { grid-area: time; font: 600 14px/1 var(--mono); opacity: 1; }
+  html.komik .seek {
+    grid-area: seek; display: flex; height: 32px; border: 2.5px solid var(--ink); border-radius: 99px;
+    background: var(--paper); overflow: hidden;
+  }
+  html.komik .seek .tab {
+    display: flex; align-items: center; flex: none; padding: 0 16px; background: var(--ink); color: var(--paper);
+    font: 600 13px/1 var(--mono); border-radius: 99px;
+  }
+  html.komik .seek .rail { position: relative; flex: 1; margin: 4px; }
+  html.komik .seek .fill {
+    display: block; position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 99px;
+    background: radial-gradient(var(--spot) 2.2px, transparent 2.7px) 0 0 / 6px 6px,
+                radial-gradient(var(--spot) 2.2px, transparent 2.7px) 3px 3px / 6px 6px;
+  }
+  html.komik .seek input[type=range] {
+    position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer;
+  }
+  html.komik .seek:focus-within { outline: 4px solid var(--spot); outline-offset: 4px; }
+  html.komik button:focus-visible { outline: 4px solid var(--spot); outline-offset: 4px; }
+
+  html.komik .msg {
+    grid-column: 1 / -1; margin: 0; color: var(--ink); font: 600 14px/1.4 var(--mono); background: var(--tint);
+    border: 2.5px solid var(--ink); border-radius: 2px; padding: 8px 16px;
+  }
+  html.komik .msg[hidden] { display: none; }
+  html.komik footer { margin-top: 16px; opacity: 1; font: 600 14px/1 var(--mono); text-align: right; }
+  html.komik footer a { color: var(--ink); text-decoration: none; border-bottom: 2.5px solid var(--spot); }
+  html.komik footer a::after { content: ' \25B6\25B6'; color: var(--spot); }
+  html.komik footer a:hover { background: var(--tint); }
+  html.komik footer a:focus-visible { outline: 4px solid var(--spot); outline-offset: 4px; }
+
+  @media (max-width: 560px) {
+    html.komik main { padding: 16px; }
+    html.komik .deck { grid-template-columns: 1fr 112px; gap: 8px; }
+    html.komik .viz { min-height: 200px; padding: 16px 12px 0; gap: 8px; }
+    html.komik .viz i:nth-child(even) { display: none; }      /* 8 wider columns on a phone */
+    html.komik .chord { padding: 32px 8px 8px; }
+    html.komik .chord .name { font-size: 32px; }
+    html.komik .chord svg { width: 64px; height: 72px; }
+    html.komik .ctrl { padding: 12px; gap: 12px; }
+    html.komik .deck { row-gap: 8px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html.komik .chord.pop { animation: none; }
+    html.komik button.play { transition: none; }
+  }
 </style>
 </head>
 <body>
 <main>
   <h1 class="round" id="title" aria-label="tape"></h1>
 
-  <div class="deck">
+  <div class="deck" id="deck">
     <div class="chord" id="chord" aria-live="polite" hidden>
+      <div class="tag lbl" aria-hidden="true">ukulele</div>
       <div class="name round" id="cname">C</div>
       <svg viewBox="0 0 72 80" id="cdiag" aria-hidden="true"></svg>
       <div class="next" id="cnext"></div>
@@ -85,7 +224,7 @@
       </button>
       <div class="track">
         <div class="t round" id="side">side A</div>
-        <input type="range" id="seek" min="0" max="1" step="0.1" value="0" aria-label="Position">
+        <div class="seek"><span class="tab" aria-hidden="true">PLAY</span><div class="rail"><i class="fill" id="fill"></i><input type="range" id="seek" min="0" max="1" step="0.1" value="0" aria-label="Position"></div></div>
         <div class="time" id="time">0:00</div>
       </div>
     </div>
@@ -95,24 +234,34 @@
   <footer><a id="owner" href="https://github.com/">github.com</a></footer>
 </main>
 
-<!-- the settings (label, song, colours) come from tape.json, written next to this page by `python -m pernik build` -->
+<!-- the settings (label, song, colours, style) come from tape.json, written next to this page by `python -m pernik build` -->
 <audio id="audio" preload="auto"></audio>
 
 <script>
   const PLAY = 'M7 4.5v15a1 1 0 0 0 1.5.86l12-7.5a1 1 0 0 0 0-1.72l-12-7.5A1 1 0 0 0 7 4.5z';
   const PAUSE = 'M6 4h4v16H6zM14 4h4v16h-4z';
+  const PLAY_K = 'M7 4.5L20 12L7 19.5Z';          // komik: a plain ink triangle and two bars
+  const PAUSE_K = 'M6 4.5h4.5v15H6zM13.5 4.5H18v15h-4.5z';
   const $ = id => document.getElementById(id);
-  const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const root = document.documentElement;
+  const css = name => getComputedStyle(root).getPropertyValue(name).trim();
   let COLORS = ['#FFD23F', '#3DDC97', '#4CC9F0', '#FF5FA2', '#FF8A3D'];
+  let KOMIK = root.classList.contains('komik');
+  setTimeout(() => root.classList.add('ready'), 1500);     // never leave the page hidden
 
   function applyColors(c) {
-    const root = document.documentElement.style;
     for (const k of ['krem', 'tinta', 'jeruk', 'pink', 'kuning', 'mint', 'langit', 'anggur']) {
-      if (c && /^#[0-9a-f]{6}$/i.test(c[k] || '')) root.setProperty('--' + k, c[k]);
+      if (c && /^#[0-9a-f]{6}$/i.test(c[k] || '')) root.style.setProperty('--' + k, c[k]);
     }
-    if (c && c.round) root.setProperty('--round', c.round);
-    if (c && c.body) root.setProperty('--body', c.body);
+    if (c && c.round) root.style.setProperty('--round', c.round);
+    if (c && c.body) root.style.setProperty('--body', c.body);
     COLORS = ['--kuning', '--mint', '--langit', '--pink', '--jeruk'].map(css);
+  }
+  function applyKomik(k) {
+    for (const n of ['paper', 'ink', 'spot', 'tint']) {
+      if (k && /^#[0-9a-f]{6}$/i.test(k[n] || '')) root.style.setProperty('--' + n, k[n]);
+    }
+    for (const n of ['display', 'label', 'mono']) if (k && k[n]) root.style.setProperty('--' + n, k[n]);
   }
 
   function setTitle(text) {
@@ -120,9 +269,10 @@
     h.textContent = '';
     h.setAttribute('aria-label', text);
     document.title = text;
+    if (KOMIK) { h.textContent = text; h.removeAttribute('aria-label'); return; }
     [...text].forEach((ch, i) => {
       const s = document.createElement('span');
-      s.textContent = ch === ' ' ? ' ' : ch;
+      s.textContent = ch === ' ' ? '\u00a0' : ch;
       s.style.color = COLORS[i % COLORS.length];
       s.style.textShadow = '-3px -3px 0 var(--krem), 3px -3px 0 var(--krem), -3px 3px 0 var(--krem), 3px 3px 0 var(--krem), 0 4px 0 var(--krem), 6px 8px 0 var(--shadow)';
       s.style.animationDelay = (i * 0.09) + 's';
@@ -133,11 +283,18 @@
 
   const N = 16;
   const bars = [...Array(N)].map(() => $('viz').appendChild(document.createElement('i')));
-  const paintBars = () => bars.forEach((b, i) => b.style.background = COLORS[i % COLORS.length]);
+  const paintBars = () => bars.forEach((b, i) => b.style.background = KOMIK ? '' : COLORS[i % COLORS.length]);
+  const barMin = () => KOMIK ? 16 : 14;
+  const barRange = () => KOMIK ? Math.max(40, $('viz').clientHeight - 24 - 4 - 16 - 8) : 150;
+  // komik: bars rest in a low hump, so the still page is a finished picture
+  const rest = () => bars.forEach((b, i) => b.style.height = (KOMIK
+    ? barMin() + barRange() * (0.14 + 0.3 * Math.sin(Math.PI * (i + .5) / N)) : barMin()) + 'px');
 
-  const audio = $('audio'), btn = $('play'), icon = $('icon'), seek = $('seek'), time = $('time');
+  const audio = $('audio'), btn = $('play'), icon = $('icon'), seek = $('seek'), time = $('time'), fill = $('fill');
   const fmt = t => Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0');
-  btn.style.color = 'var(--tinta)';
+  const total = d => fmt(Math.round(d));            // the length, rounded like the cassette label
+  const setIcon = playing => icon.setAttribute('d', playing ? (KOMIK ? PAUSE_K : PAUSE) : (KOMIK ? PLAY_K : PLAY));
+  btn.style.color = KOMIK ? '' : 'var(--tinta)';
 
   let ctx, analyser, data, edges;
   function setupAudio() {
@@ -162,30 +319,45 @@
     if (audio.paused) audio.play().catch(() => showMsg("This song couldn't be played here."));
     else audio.pause();
   });
-  audio.addEventListener('play', () => { icon.setAttribute('d', PAUSE); btn.setAttribute('aria-label', 'Pause'); requestAnimationFrame(draw); });
-  audio.addEventListener('pause', () => { icon.setAttribute('d', PLAY); btn.setAttribute('aria-label', 'Play'); });
-  audio.addEventListener('ended', () => { bars.forEach(b => b.style.height = '14px'); });
+  audio.addEventListener('play', () => { setIcon(true); btn.setAttribute('aria-label', 'Pause'); requestAnimationFrame(draw); });
+  audio.addEventListener('pause', () => { setIcon(false); btn.setAttribute('aria-label', 'Play'); });
+  audio.addEventListener('ended', rest);
   audio.addEventListener('loadedmetadata', () => { seek.max = audio.duration; });
   audio.addEventListener('error', () => showMsg("The song file couldn't be loaded."));
-  seek.addEventListener('input', () => { audio.currentTime = +seek.value; if (CH) showChord(chordAt(+seek.value)); });
+  seek.addEventListener('input', () => {
+    audio.currentTime = +seek.value; showPos(+seek.value);
+    if (CH) showChord(chordAt(+seek.value));
+  });
   function showMsg(t) { $('msg').textContent = t; $('msg').hidden = false; }
+  function showPos(t) {
+    const d = audio.duration || TAPE.duration;
+    time.textContent = fmt(t) + ' / ' + total(d);
+    fill.style.width = d ? Math.min(100, 100 * t / d) + '%' : '0';
+  }
 
-  const TAPE = { label: 'my tape', side: 'A', song: '', cross_origin: false, duration: 0, owner: '', chords: true, colors: null };
+  const TAPE = { label: 'my tape', side: 'A', song: '', cross_origin: false, duration: 0, owner: '', chords: true, colors: null, style: '', komik: null };
   fetch('tape.json').then(r => r.ok ? r.json() : {}).catch(() => ({})).then(j => {
     Object.assign(TAPE, j);
+    KOMIK = TAPE.style === 'komik';
+    root.classList.toggle('komik', KOMIK);
     applyColors(TAPE.colors);
+    if (KOMIK) applyKomik(TAPE.komik);
+    btn.style.color = KOMIK ? '' : 'var(--tinta)';
+    setIcon(!audio.paused);
     paintBars();
     setTitle(TAPE.label);
     if (TAPE.cross_origin) audio.crossOrigin = 'anonymous';   // song served from another host (CORS)
     if (TAPE.song) audio.src = TAPE.song; else showMsg('No song yet: set song = "..." in pernik.toml.');
     $('side').textContent = 'side ' + TAPE.side;
-    if (TAPE.duration) { seek.max = TAPE.duration; time.textContent = '0:00 / ' + fmt(TAPE.duration); }
+    if (TAPE.duration) { seek.max = TAPE.duration; time.textContent = '0:00 / ' + total(TAPE.duration); }
     if (TAPE.owner) {
       const a = $('owner');
       a.href = 'https://github.com/' + encodeURIComponent(TAPE.owner);
       a.textContent = 'github.com/' + TAPE.owner;
     }
-    if (TAPE.chords) loadChords();
+    if (TAPE.chords) loadChords(); else $('deck').classList.add('nochord');
+    root.classList.add('ready');
+    rest();
   });
 
   // live chord card, synced to the recording (chords.json next to this page)
@@ -193,21 +365,23 @@
   function loadChords() {
     fetch('chords.json').then(r => r.json()).then(j => {
       if (!j.timeline || !j.timeline.length) throw new Error('no chords');
-      CH = j; $('chord').hidden = false; showChord(0);
-    }).catch(() => { $('chord').hidden = true; });
+      CH = j; $('chord').hidden = false; $('deck').classList.remove('nochord'); showChord(0);
+    }).catch(() => { $('chord').hidden = true; $('deck').classList.add('nochord'); rest(); });
   }
   function diagram(shape) {
-    const xs = [12, 28, 44, 60], top = 14, fh = 15, ink = css('--tinta');
+    const xs = [12, 28, 44, 60], top = 14, fh = 15, ink = css(KOMIK ? '--ink' : '--tinta');
     const frets = [...shape].filter(c => /\d/.test(c)).map(Number);
     const base = frets.length && Math.max(...frets) > 4 ? Math.min(...frets.filter(f => f > 0)) : 1;
-    let g = base === 1 ? `<rect x="10" y="${top - 3}" width="52" height="4" rx="2" fill="${ink}"/>`
+    // komik: 4 px nut, 1.5 px frets and strings, spot dots with a 2.5 px ink line
+    const lw = KOMIK ? [4, 1.5, 1.5, 2.5, 1.5] : [4, 1.5, 2, 2, 1.8];
+    let g = base === 1 ? `<rect x="10" y="${top - lw[0] + 1}" width="52" height="${lw[0]}" rx="${KOMIK ? 0 : 2}" fill="${ink}"/>`
                        : `<text x="4" y="${top + fh * .5 + 3}" text-anchor="middle" font-size="9" fill="${ink}">${base}</text>`;
-    for (let f = 1; f <= 4; f++) g += `<line x1="12" x2="60" y1="${top + f * fh}" y2="${top + f * fh}" stroke="${ink}" stroke-width="1.5" opacity=".5"/>`;
-    xs.forEach(x => g += `<line x1="${x}" x2="${x}" y1="${top}" y2="${top + 4 * fh}" stroke="${ink}" stroke-width="2"/>`);
+    for (let f = 1; f <= 4; f++) g += `<line x1="12" x2="60" y1="${top + f * fh}" y2="${top + f * fh}" stroke="${ink}" stroke-width="${lw[1]}" opacity="${KOMIK ? 1 : .5}"/>`;
+    xs.forEach(x => g += `<line x1="${x}" x2="${x}" y1="${top}" y2="${top + 4 * fh}" stroke="${ink}" stroke-width="${lw[2]}"/>`);
     [...shape].slice(0, 4).forEach((c, i) => {
       if (c.toLowerCase() === 'x') g += `<text x="${xs[i]}" y="${top - 6}" text-anchor="middle" font-size="9" fill="${ink}">x</text>`;
-      else if (c === '0' || !/\d/.test(c)) g += `<circle cx="${xs[i]}" cy="${top - 8}" r="3.5" fill="none" stroke="${ink}" stroke-width="1.8"/>`;
-      else g += `<circle cx="${xs[i]}" cy="${top + (+c - base + .5) * fh}" r="6" fill="${COLORS[i]}" stroke="${ink}" stroke-width="2"/>`;
+      else if (c === '0' || !/\d/.test(c)) g += `<circle cx="${xs[i]}" cy="${top - 8}" r="3.5" fill="none" stroke="${ink}" stroke-width="${lw[4]}"/>`;
+      else g += `<circle cx="${xs[i]}" cy="${top + (+c - base + .5) * fh}" r="6" fill="${KOMIK ? css('--spot') : COLORS[i]}" stroke="${ink}" stroke-width="${lw[3]}"/>`;
     });
     return g;
   }
@@ -217,7 +391,8 @@
     const [name] = CH.timeline[i], nxt = CH.timeline[i + 1];
     $('cname').textContent = name;
     $('cdiag').innerHTML = diagram(String((CH.shapes || {})[name] || '0000'));
-    $('cnext').textContent = nxt ? 'next: ' + nxt[0] : '';
+    // komik: "NEXT: Am" (the label is upper case, chord names keep their case); "TAMAT" = the end
+    $('cnext').textContent = nxt ? (KOMIK ? 'NEXT: ' : 'next: ') + nxt[0] : (KOMIK ? 'TAMAT' : '');
     const c = $('chord');
     c.classList.remove('pop'); void c.offsetWidth; c.classList.add('pop');
   }
@@ -229,13 +404,14 @@
 
   function draw() {
     seek.value = audio.currentTime;
-    time.textContent = fmt(audio.currentTime) + ' / ' + fmt(audio.duration || TAPE.duration);
+    showPos(audio.currentTime);
     if (analyser) {
       analyser.getByteFrequencyData(data);
+      const lo = barMin(), span = barRange();
       bars.forEach((b, i) => {
         let v = 0;
         for (let k = edges[i]; k <= Math.max(edges[i], edges[i + 1] - 1); k++) v = Math.max(v, data[k]);
-        b.style.height = (14 + Math.pow(v / 255, 1.6) * 150) + 'px';
+        b.style.height = (lo + Math.pow(v / 255, 1.6) * span) + 'px';
       });
     }
     if (CH) showChord(chordAt(audio.currentTime));

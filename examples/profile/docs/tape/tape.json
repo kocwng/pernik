@@ -9,15 +9,25 @@
   "repo": "octocat",
   "chords": true,
   "colors": {
-    "krem": "#FFF6E5",
-    "tinta": "#2B2340",
-    "jeruk": "#FF8A3D",
-    "pink": "#FF5FA2",
-    "kuning": "#FFD23F",
-    "mint": "#3DDC97",
-    "langit": "#4CC9F0",
-    "anggur": "#7B5CFF",
-    "round": "'Arial Rounded MT Bold', 'Nunito', 'Varela Round', 'Trebuchet MS', 'Segoe UI', sans-serif",
-    "body": "'Segoe UI', Ubuntu, 'Helvetica Neue', sans-serif"
+    "krem": "#FAF3F8",
+    "tinta": "#1C1520",
+    "jeruk": "#E0569B",
+    "pink": "#E0569B",
+    "kuning": "#F4BCD8",
+    "mint": "#E0569B",
+    "langit": "#E0569B",
+    "anggur": "#1C1520",
+    "round": "'Arial Rounded MT Bold', 'Nunito', 'Varela Round', sans-serif",
+    "body": "'Helvetica Neue', Arial, sans-serif"
+  },
+  "style": "komik",
+  "komik": {
+    "paper": "#FAF3F8",
+    "ink": "#1C1520",
+    "spot": "#E0569B",
+    "tint": "#F4BCD8",
+    "display": "'Arial Rounded MT Bold', 'Nunito', 'Varela Round', sans-serif",
+    "label": "'Arial Black', 'Helvetica Neue', Arial, sans-serif",
+    "mono": "ui-monospace, 'SF Mono', Menlo, Consolas, monospace"
   }
 }

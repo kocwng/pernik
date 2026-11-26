@@ -24,7 +24,7 @@ def write(folder, name, text):
 
 class ThemeTests(unittest.TestCase):
     def test_default_theme_has_both_modes(self):
-        th = load_theme('pernik')
+        th = load_theme('stiker')
         light, dark = th.mode('light'), th.mode('dark')
         self.assertEqual(light.page, '#ffffff')
         self.assertEqual(dark.page, '#0d1117')
@@ -35,7 +35,7 @@ class ThemeTests(unittest.TestCase):
     def test_extends(self):
         with tempfile.TemporaryDirectory() as d:
             p = write(d, 'mine.toml', '''
-                extends = "pernik"
+                extends = "stiker"
                 name = "mine"
                 accents = ["#000000"]
                 [dark]
@@ -95,9 +95,14 @@ class WidgetTests(unittest.TestCase):
     REQUIRED = {'mixtape': None}   # needs a song file; covered by its own test
 
     def test_all_widgets_build(self):
+        for theme in ('komik', 'komik-laut', 'stiker', 'sogan'):
+            with self.subTest(theme=theme):
+                self._build_all(theme)
+
+    def _build_all(self, theme):
         reg = load_all()
         with tempfile.TemporaryDirectory() as d:
-            lines = ['user = "octocat"']
+            lines = ['user = "octocat"', f'theme = "{theme}"']
             for kind in sorted(reg):
                 if kind in self.REQUIRED or kind.startswith('_'):
                     continue

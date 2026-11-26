@@ -11,7 +11,7 @@ MARGIN = 26                # pill-to-canvas edge room (outline, shadow, star)
 STAR = 'M0-11Q2-2 11 0Q2 2 0 11Q-2 2-11 0Q-2-2 0-11Z'
 
 
-@widget('heading', defaults={'text': 'tech stack', 'color': 'pink', 'align': 'left'})
+@widget('heading', defaults={'number': 0, 'note': '', 'text': 'tech stack', 'color': 'pink', 'align': 'left'})
 def heading(opts, ctx):
     """Section title on a coloured pill sticker.
 
@@ -19,6 +19,8 @@ def heading(opts, ctx):
     color  a theme colour name (pink, mint, langit, ...) or "#rrggbb"
     align  "left", "center" or "right"
     """
+    if ctx.pal.style == 'komik':
+        from ._komik_heading import render; return render(opts, ctx)
     pal = ctx.pal
     s = swatch(pal)
     text = str(opts.get('text') or '').strip() or 'hello'

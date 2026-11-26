@@ -1,0 +1,17 @@
+# komik with a different spot colour: Sea blue.
+extends = "komik"
+accents = ["#2F6FDB", "#1C1520", "#BCD2F6"]
+name = "komik-laut"
+
+[komik]
+paper = "#F4F7FC"
+spot = "#2F6FDB"
+tint = "#BCD2F6"
+
+[colors]
+pink = "#2F6FDB"
+jeruk = "#2F6FDB"
+mint = "#2F6FDB"
+langit = "#2F6FDB"
+kuning = "#BCD2F6"
+cream = "#F4F7FC"

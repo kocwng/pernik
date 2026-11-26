@@ -1,19 +1,17 @@
 {
   "user": "octocat",
-  "theme": "pernik",
+  "theme": "komik",
   "widgets": [
     {
       "id": "hello",
       "kind": "hero",
       "files": {
-        "light": "pernik/hello-light.svg",
-        "dark": "pernik/hello-dark.svg"
+        "both": "pernik/hello.svg"
       },
       "bytes": {
-        "light": 19734,
-        "dark": 19734
+        "both": 14390
       },
-      "alt": "hello there! (a banana mascot strums a ukulele, a chord card shows the chord being played while music notes float up)",
+      "alt": "hello there! (a banana strums a ukulele)",
       "href": null,
       "width": "100%",
       "extra": []
@@ -22,12 +20,10 @@
       "id": "line-kawung",
       "kind": "divider",
       "files": {
-        "light": "pernik/line-kawung-light.svg",
-        "dark": "pernik/line-kawung-dark.svg"
+        "both": "pernik/line-kawung.svg"
       },
       "bytes": {
-        "light": 12783,
-        "dark": 12783
+        "both": 7640
       },
       "alt": "Kawung batik divider",
       "href": null,
@@ -38,30 +34,12 @@
       "id": "about-title",
       "kind": "heading",
       "files": {
-        "light": "pernik/about-title-light.svg",
-        "dark": "pernik/about-title-dark.svg"
+        "both": "pernik/about-title.svg"
       },
       "bytes": {
-        "light": 1890,
-        "dark": 1890
+        "both": 2730
       },
-      "alt": "about me",
-      "href": null,
-      "width": "100%",
-      "extra": []
-    },
-    {
-      "id": "line-wave",
-      "kind": "divider",
-      "files": {
-        "light": "pernik/line-wave-light.svg",
-        "dark": "pernik/line-wave-dark.svg"
-      },
-      "bytes": {
-        "light": 2041,
-        "dark": 2041
-      },
-      "alt": "Wavy ribbon divider",
+      "alt": "chapter 1: about me",
       "href": null,
       "width": "100%",
       "extra": []
@@ -70,14 +48,12 @@
       "id": "stack-title",
       "kind": "heading",
       "files": {
-        "light": "pernik/stack-title-light.svg",
-        "dark": "pernik/stack-title-dark.svg"
+        "both": "pernik/stack-title.svg"
       },
       "bytes": {
-        "light": 1910,
-        "dark": 1910
+        "both": 2855
       },
-      "alt": "tech stack",
+      "alt": "chapter 2: tech stack",
       "href": null,
       "width": "100%",
       "extra": []
@@ -86,30 +62,12 @@
       "id": "stack",
       "kind": "stack",
       "files": {
-        "light": "pernik/stack-light.svg",
-        "dark": "pernik/stack-dark.svg"
+        "both": "pernik/stack.svg"
       },
       "bytes": {
-        "light": 16158,
-        "dark": 16158
+        "both": 14543
       },
       "alt": "Tech stack: Python, Go, Docker, PostgreSQL, Git, Figma",
-      "href": null,
-      "width": "100%",
-      "extra": []
-    },
-    {
-      "id": "line-truntum",
-      "kind": "divider",
-      "files": {
-        "light": "pernik/line-truntum-light.svg",
-        "dark": "pernik/line-truntum-dark.svg"
-      },
-      "bytes": {
-        "light": 13845,
-        "dark": 13845
-      },
-      "alt": "Truntum batik divider",
       "href": null,
       "width": "100%",
       "extra": []
@@ -121,7 +79,7 @@
         "both": "pernik/tape.svg"
       },
       "bytes": {
-        "both": 11283
+        "both": 7886
       },
       "alt": "Give it a listen! Play the recording.",
       "href": "https://octocat.github.io/octocat/tape/",
@@ -136,12 +94,10 @@
       "id": "line-mega",
       "kind": "divider",
       "files": {
-        "light": "pernik/line-mega-light.svg",
-        "dark": "pernik/line-mega-dark.svg"
+        "both": "pernik/line-mega.svg"
       },
       "bytes": {
-        "light": 8267,
-        "dark": 8267
+        "both": 5480
       },
       "alt": "Mega mendung batik divider",
       "href": null,
@@ -152,12 +108,10 @@
       "id": "bye",
       "kind": "footer",
       "files": {
-        "light": "pernik/bye-light.svg",
-        "dark": "pernik/bye-dark.svg"
+        "both": "pernik/bye.svg"
       },
       "bytes": {
-        "light": 7085,
-        "dark": 7085
+        "both": 3286
       },
       "alt": "thanks for stopping by!",
       "href": null,

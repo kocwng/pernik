@@ -1,5 +1,5 @@
 # Earthy batik colours: sogan brown, indigo, cream and a touch of gold.
-extends = "pernik"
+extends = "stiker"
 name = "sogan"
 accents = ["#8B5A2B", "#2E4A7D", "#C9962E", "#A0522D", "#5B7553", "#6B3E26"]
 

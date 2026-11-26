@@ -1,7 +1,7 @@
 """Themes: one TOML file holds the palette, fonts and sticker style for every widget.
 
     from pernik.theme import load_theme
-    th = load_theme('pernik')          # a name from pernik/themes/ or a path to a .toml file
+    th = load_theme('komik')           # a name from pernik/themes/ or a path to a .toml file
     pal = th.mode('dark')               # Palette for one of GitHub's two themes
     pal.accents[0], pal.color('pink'), pal.outline, pal.shadow, pal.shadow_opacity, pal.text
 """
@@ -30,6 +30,7 @@ class Palette:
     shadow_opacity: float
     text: str
     muted: str
+    style: str = 'sticker'   # 'sticker' or 'komik': which drawing style widgets use
     extra: dict = field(default_factory=dict)
 
     def color(self, name, default=None):
@@ -68,6 +69,7 @@ class Theme:
             shadow_opacity=float(m.get('shadow_opacity', .35)),
             text=m.get('text', '#2B2340' if mode == 'light' else '#FFF6E5'),
             muted=m.get('muted', '#57606a'),
+            style=r.get('style', 'sticker'),
             extra={k: v for k, v in m.items() if k not in
                    ('page', 'outline', 'shadow', 'shadow_opacity', 'text', 'muted')},
         )
@@ -80,7 +82,7 @@ def theme_path(name_or_path, base=None):
     return os.path.join(THEMES, f'{name_or_path}.toml')
 
 
-def load_theme(name_or_path='pernik', base=None):
+def load_theme(name_or_path='komik', base=None):
     path = theme_path(name_or_path, base)
     if not os.path.exists(path):
         have = sorted(f[:-5] for f in os.listdir(THEMES) if f.endswith('.toml'))

@@ -1,0 +1,17 @@
+# komik with a different spot colour: Leaf green.
+extends = "komik"
+accents = ["#2E9B68", "#1C1520", "#B9E3CD"]
+name = "komik-daun"
+
+[komik]
+paper = "#F4FAF6"
+spot = "#2E9B68"
+tint = "#B9E3CD"
+
+[colors]
+pink = "#2E9B68"
+jeruk = "#2E9B68"
+mint = "#2E9B68"
+langit = "#2E9B68"
+kuning = "#B9E3CD"
+cream = "#F4FAF6"

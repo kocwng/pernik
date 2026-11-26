@@ -104,7 +104,7 @@ def _icon_path(root, slug, say):
     return d
 
 
-@widget('stack', defaults={'icons': ['python', 'git', 'docker'], 'columns': 0, 'size': 80, 'labels': True})
+@widget('stack', defaults={'numbered': True, 'icons': ['python', 'git', 'docker'], 'columns': 0, 'size': 80, 'labels': True})
 def stack(opts, ctx):
     """Tech-stack logos as die-cut stickers (Simple Icons slugs).
 
@@ -113,6 +113,8 @@ def stack(opts, ctx):
     size     tile width in px (48-140)
     labels   show the name under the logo
     """
+    if ctx.pal.style == 'komik':
+        from ._komik_stack import render; return render(opts, ctx)
     pal = ctx.pal
     s = swatch(pal)
     say = ctx.log if ctx.mode == 'light' else (lambda *a: None)

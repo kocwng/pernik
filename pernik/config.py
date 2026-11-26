@@ -1,7 +1,7 @@
 """pernik.toml: the one file a user edits.
 
     schema = 1
-    theme = "pernik"          # built-in theme name, or a path like "my-theme.toml"
+    theme = "komik"           # built-in theme name, or a path like "my-theme.toml"
     output = "pernik"         # folder (in your repo) the pictures are written to
     # user = "octocat"        # GitHub username; found automatically in Actions and from git
 
@@ -54,7 +54,7 @@ def load_config(path):
     return {
         'root': root,
         'path': path,
-        'theme': raw.get('theme', 'pernik'),
+        'theme': raw.get('theme', 'komik'),
         'output': raw.get('output', 'pernik').strip('/') or 'pernik',
         'user': raw.get('user') or find_user(root),
         'readme': raw.get('readme', 'README.md'),

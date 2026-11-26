@@ -4,7 +4,7 @@ import os
 STARTER_TOML = '''# Pernik settings. Edit, then run `python -m pernik preview` or push and let the Action build.
 # Every widget kind and its options: `python -m pernik list`
 schema = 1
-theme = "pernik"
+theme = "komik"
 output = "pernik"
 
 [[widget]]

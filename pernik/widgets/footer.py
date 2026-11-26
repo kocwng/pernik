@@ -36,6 +36,8 @@ def wave(phase):
 @widget('footer', defaults={'text': 'thanks for stopping by!'})
 def footer(opts, ctx):
     """Wavy rainbow ribbon with a cream pill of text (text = "thanks for stopping by!")."""
+    if ctx.pal.style == 'komik':
+        from ._komik_footer import render; return render(opts, ctx)
     pal = ctx.pal
     s = swatch(pal)
     text = str(opts.get('text') or '').strip() or 'thanks for stopping by!'

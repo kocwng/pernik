@@ -306,6 +306,340 @@ class ThinLine:
             paste(frame, part, self.x0 - self.m, self.cy - self.hh - self.m)
 
 
+# ---------------------------------------------------------------- komik style
+
+KOMIK_COLORS = {'paper': '#FAF3F8', 'ink': '#1C1520', 'spot': '#E0569B', 'tint': '#F4BCD8'}
+LABEL_FONTS = [
+    '/System/Library/Fonts/Supplemental/Arial Black.ttf', '/Library/Fonts/Arial Black.ttf',
+    '/usr/share/fonts/truetype/msttcorefonts/Arial_Black.ttf',
+    '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', '/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf',
+    'C:/Windows/Fonts/ariblk.ttf',
+]
+MONO_FONTS = [
+    '/System/Library/Fonts/SFNSMono.ttf', '/System/Library/Fonts/Menlo.ttc',
+    '/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf', '/usr/share/fonts/dejavu/DejaVuSansMono-Bold.ttf',
+    '/usr/share/fonts/truetype/liberation/LiberationMono-Bold.ttf', 'C:/Windows/Fonts/consolab.ttf',
+]
+# The README shows the 1280 px video about 900 px wide, so the design's lines (4 / 2.5 / 1.5 px)
+# and halftone are drawn 1.4x here to look the same as the SVG cards next to it.
+KF, KL, KH = 6, 3.5, 2                    # frame, line, hair
+KR_PANEL, KR_LABEL = 8, 3                 # the 6 and 2 px radii, scaled
+
+
+def kfont(kind, size):
+    key = ('k' + kind, round(size))
+    if key not in _fonts:
+        if 'k' + kind not in _fonts:
+            _fonts['k' + kind] = _font_file(LABEL_FONTS if kind == 'label' else MONO_FONTS)
+        path = _fonts['k' + kind]
+        if not path:
+            f = ImageFont.load_default(max(1, round(size)))
+        else:
+            f = ImageFont.truetype(path, max(1, round(size)), index=1 if path.endswith('Menlo.ttc') else 0)
+            try:
+                f.set_variation_by_name('Semibold')     # a variable mono (SF Mono): weight 600, like the SVG
+            except (OSError, ValueError, AttributeError):
+                pass
+        _fonts[key] = f
+    return _fonts[key]
+
+
+def dots(w, h, ox, oy, period, r):
+    """Halftone alpha (L image, w x h, its top-left at (ox, oy) on the frame): round dots on a
+    45-degree lattice (two square grids, the second offset by half a period), anti-aliased.
+    The lattice is fixed to the frame, so neighbouring areas line up."""
+    ys, xs = np.mgrid[0:h, 0:w].astype(np.float32)
+    xs += ox + .5
+    ys += oy + .5
+    a = np.zeros((h, w), np.float32)
+    for off in (0.0, period / 2):
+        u = (xs - off) % period - period / 2
+        v = (ys - off) % period - period / 2
+        a = np.maximum(a, np.clip(r + .5 - np.sqrt(u * u + v * v), 0, 1))
+    return Image.fromarray((a * 255).astype(np.uint8), 'L')
+
+
+class Sketch:
+    """An RGBA picture of w x h px whose top-left is (ox, oy) on the frame. Each paint() draws
+    a mask K times larger in frame coordinates, reduces it (area average, so edges are smooth)
+    and lays one colour through it, like one pass of a two-colour press."""
+
+    def __init__(self, w, h, ox=0, oy=0, k=K):
+        self.w, self.h, self.ox, self.oy, self.k = int(w), int(h), ox, oy, k
+        self.im = Image.new('RGBA', (self.w, self.h), (0, 0, 0, 0))
+
+    def p(self, x, y):
+        return (x - self.ox) * self.k, (y - self.oy) * self.k
+
+    def mask(self, fn):
+        m = Image.new('L', (self.w * self.k, self.h * self.k), 0)
+        fn(ImageDraw.Draw(m), self)
+        return m.reduce(self.k)
+
+    def paint(self, color, fn=None, mask=None, pattern=None):
+        a = mask if mask is not None else self.mask(fn)
+        if pattern is not None:
+            a = Image.fromarray((np.asarray(a, np.float32) * np.asarray(pattern, np.float32) / 255).astype(np.uint8), 'L')
+        layer = Image.new('RGBA', (self.w, self.h), color + (255,))
+        layer.putalpha(a)
+        self.im.alpha_composite(layer)
+
+    def pattern(self, period, r):
+        return dots(self.w, self.h, self.ox, self.oy, period, r)
+
+    # shapes, in frame coordinates (call inside a mask function)
+    def rrect(self, d, x0, y0, x1, y1, r, width=0):
+        """Filled rounded rect, or (width > 0) its outline centred on the edge, like SVG."""
+        h = width / 2
+        box = [self.p(x0 - h, y0 - h), self.p(x1 + h, y1 + h)]
+        d.rounded_rectangle(box, radius=max(0, (r + h) * self.k), fill=None if width else 255,
+                            outline=255 if width else None, width=round(width * self.k) if width else 0)
+
+    def circle(self, d, cx, cy, r, width=0):
+        h = width / 2
+        box = [self.p(cx - r - h, cy - r - h), self.p(cx + r + h, cy + r + h)]
+        if width:
+            d.ellipse(box, outline=255, width=round(width * self.k))
+        else:
+            d.ellipse(box, fill=255)
+
+    def poly(self, d, pts, width=0, closed=True):
+        q = [self.p(x, y) for x, y in pts]
+        if not width:
+            d.polygon(q, fill=255)
+            return
+        w = round(width * self.k)
+        d.line(q + ([q[0], q[1]] if closed else []), fill=255, width=w, joint='curve')
+        for x, y in (q if not closed else []):
+            d.ellipse([x - w / 2, y - w / 2, x + w / 2, y + w / 2], fill=255)      # round caps
+
+    def line(self, d, x0, y0, x1, y1, width):
+        self.poly(d, [(x0, y0), (x1, y1)], width, closed=False)
+
+    def text(self, d, x, y, s, kind, size, anchor='ls', track=0.0):
+        f = kfont(kind, size * self.k)
+        if not track:
+            d.text(self.p(x, y), s, font=f, fill=255, anchor=anchor)
+            return
+        tw = sum(f.getlength(c) for c in s) + track * size * self.k * (len(s) - 1)
+        px, py = self.p(x, y)
+        px -= {'l': 0, 'm': tw / 2, 'r': tw}[anchor[0]]
+        for c in s:
+            d.text((px, py), c, font=f, fill=255, anchor='l' + anchor[1])
+            px += f.getlength(c) + track * size * self.k
+
+
+def kburst(cx, cy, r1, r2, points, seed=7):
+    import random
+    rnd = random.Random(seed)
+    pts = []
+    for i in range(points * 2):
+        a = math.pi * i / points
+        r = (r2 if i % 2 == 0 else r1) * (1 + rnd.uniform(-.06, .06))
+        pts.append((cx + r * math.cos(a), cy + r * math.sin(a)))
+    return pts
+
+
+class KomikStrip:
+    """The komik player strip: paper, an ink-framed cassette panel (halftone burst, reels that
+    spin while the tape winds from left to right) and an equalizer panel (16 ink-outlined
+    halftone columns on the panel floor), with a thin ink progress line in the calm bottom
+    56 px that GitHub's controls cover.
+
+      +----------------------+ +[ DEMO TAPE ]-------------------- SIDE A · 0:49 -+
+      |   burst + cassette   | |   ▌▌ ▌▌▌ ▌▌▌▌ ▌▌▌ ▌▌  equalizer                    |
+      +----------------------+ +--------------------------------------------------+
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ progress
+    """
+    AX, AY, AW, AH = 32, 32, 464, 216            # cassette panel
+    BX, BY, BW, BH = 520, 32, 728, 216           # equalizer panel
+    S = 1.3                                      # cassette units (the SVG's 224 x 136) to px
+    REELS = ((80, 68), (144, 68))
+    PERIOD = 10                                  # halftone lattice (neighbours 7 px apart)
+
+    def __init__(self, colors, label, side, length, dur):
+        c = dict(KOMIK_COLORS, **{k: v for k, v in (colors or {}).items() if k in KOMIK_COLORS})
+        self.paper, self.ink, self.spot, self.tint = (rgb(c[k]) for k in ('paper', 'ink', 'spot', 'tint'))
+        self.label, self.side, self.length, self.dur = label, side, length, dur
+        self.cx0 = round(self.AX + (self.AW - 224 * self.S) / 2)
+        self.cy0 = round(self.AY + (self.AH - 136 * self.S) / 2)
+        self.reel_cache, self.pack_cache, self.bar_cache = {}, {}, {}
+        self.lx0, self.lx1, self.ly = 48, W - 48, 288    # progress line, in the calm bottom 56 px
+        self.bg = self._static()
+        self._window_overlay()
+        self._progress()
+        # equalizer: 16 columns, pitch 40 (a multiple of the halftone period, so all share one lattice)
+        self.bw, self.pitch = 30, 40
+        self.n = 16
+        self.ex0 = self.BX + (self.BW - (self.n - 1) * self.pitch - self.bw) / 2
+        self.ex0 = round(self.ex0 / self.PERIOD) * self.PERIOD
+        self.floor = self.BY + self.BH - KF // 2         # the inner edge of the panel's bottom frame
+        self.hmin, self.hmax = 16, 140
+
+    # cassette units -> frame px
+    def u(self, x, y):
+        return self.cx0 + x * self.S, self.cy0 + y * self.S
+
+    def _static(self):
+        sk = Sketch(W, H, k=3)
+        P, I, Sp, T = self.paper, self.ink, self.spot, self.tint
+        sk.paint(P, lambda d, s: s.rrect(d, 0, 0, W, H, 0))
+        dots_light = sk.pattern(self.PERIOD, 1.4)        # the SVG's ht1 / ht2, scaled
+        dots_mid = sk.pattern(self.PERIOD, 2.3)
+        # panel A: paper, a halftone burst behind the cassette (clipped), the frame
+        A = (self.AX, self.AY, self.AX + self.AW, self.AY + self.AH)
+        B = (self.BX, self.BY, self.BX + self.BW, self.BY + self.BH)
+        clipA = sk.mask(lambda d, s: s.rrect(d, *A, KR_PANEL))
+        burst = kburst(self.AX + self.AW / 2, self.AY + self.AH / 2, 140, 236, 12)
+        bm = sk.mask(lambda d, s: s.poly(d, burst))
+        sk.paint(Sp, mask=_mul(bm, clipA), pattern=dots_light)
+        sk.paint(I, mask=_mul(sk.mask(lambda d, s: s.poly(d, burst, KH)), clipA))
+        # panel B: paper with a faint tint halftone
+        clipB = sk.mask(lambda d, s: s.rrect(d, *B, KR_PANEL))
+        sk.paint(T, mask=clipB, pattern=sk.pattern(8, 1.5))
+        # the cassette (all but the tape packs, the window outline and the hubs, drawn per frame)
+        u, S = self.u, self.S
+        sk.paint(T, lambda d, s: s.rrect(d, *u(0, 0), *u(224, 136), 6 * S))
+        sk.paint(I, lambda d, s: s.rrect(d, *u(0, 0), *u(224, 136), 6 * S, KL))
+        for sx, sy in ((12, 12), (212, 12), (12, 124), (212, 124)):
+            sk.paint(P, lambda d, s: s.circle(d, *u(sx, sy), 4 * S))
+            sk.paint(I, lambda d, s: (s.circle(d, *u(sx, sy), 4 * S, KH), s.line(d, *u(sx - 2.5, sy), *u(sx + 2.5, sy), KH)))
+        sk.paint(P, lambda d, s: s.rrect(d, *u(16, 12), *u(208, 100), KR_LABEL))
+        sk.paint(Sp, lambda d, s: s.rrect(d, *u(16, 48), *u(208, 88), 0))
+        sk.paint(I, lambda d, s: (s.rrect(d, *u(16, 12), *u(208, 100), KR_LABEL, KL),
+                                  s.line(d, *u(16, 48), *u(208, 48), KH), s.line(d, *u(16, 88), *u(208, 88), KH),
+                                  s.line(d, *u(56, 36), *u(192, 36), KH), s.circle(d, *u(36, 30), 11 * S)))
+        sk.paint(P, lambda d, s: s.text(d, *u(36, 30.5), self.side[:1].upper(), 'label', 13 * S, anchor='mm'))
+        sk.paint(P, lambda d, s: s.rrect(d, *u(48, 52), *u(176, 84), KR_PANEL))         # the window
+        trap = [u(48, 136), u(60, 108), u(164, 108), u(176, 136)]
+        sk.paint(T, lambda d, s: s.poly(d, trap))
+        sk.paint(Sp, lambda d, s: s.poly(d, trap), pattern=dots_mid)
+        sk.paint(I, lambda d, s: s.poly(d, trap, KL, closed=False))
+        sk.paint(P, lambda d, s: (s.circle(d, *u(84, 124), 5 * S), s.circle(d, *u(140, 124), 5 * S),
+                                  s.rrect(d, *u(104, 118), *u(120, 128), 1)))
+        sk.paint(I, lambda d, s: (s.circle(d, *u(84, 124), 5 * S, KH), s.circle(d, *u(140, 124), 5 * S, KH),
+                                  s.rrect(d, *u(104, 118), *u(120, 128), 1, KH)))
+        # panel B header: the tape label as an ink label bar flush in the corner, side + length in mono
+        size, label, room = 26.0, self.label.upper(), self.BW - 360
+        fl = lambda txt, z: sum(kfont('label', z * 4).getlength(ch) for ch in txt) / 4 + .04 * z * (len(txt) - 1)  # noqa: E731
+        while fl(label, size) > room and size > 18:
+            size -= 1
+        while fl(label, size) > room and len(label) > 1:
+            label = label[:-2].rstrip() + '…'
+        tw = math.ceil((fl(label, size) + 48) / 8) * 8
+        th = 48
+        sk.paint(I, mask=_mul(sk.mask(lambda d, s: s.rrect(d, self.BX, self.BY, self.BX + tw, self.BY + th, 0)), clipB))
+        sk.paint(P, lambda d, s: s.text(d, self.BX + 24, self.BY + th / 2 + 1, label, 'label', size, anchor='lm', track=.04))
+        meta = f'SIDE {self.side} · {self.length}' if self.length else f'SIDE {self.side}'
+        sk.paint(I, lambda d, s: s.text(d, self.BX + self.BW - 24, self.BY + th / 2 + 1, meta, 'mono', 22, anchor='rm'))
+        # frames on top: the two panels, the progress track
+        sk.paint(I, lambda d, s: (s.rrect(d, *A, KR_PANEL, KF), s.rrect(d, *B, KR_PANEL, KF)))
+        sk.paint(T, lambda d, s: s.line(d, self.lx0, self.ly, self.lx1, self.ly, KL))
+        return sk.im.convert('RGB')
+
+    def _progress(self):
+        m = 4
+        sk = Sketch(self.lx1 - self.lx0 + 2 * m, 2 * m + 4, self.lx0 - m, self.ly - m - 2)
+        sk.paint(self.ink, lambda d, s: s.line(d, self.lx0, self.ly, self.lx1, self.ly, KL))
+        self.prog, self.prog_xy = sk.im, (self.lx0 - m, self.ly - m - 2)
+
+    def _window_overlay(self):
+        x0, y0 = self.u(48, 52)
+        x1, y1 = self.u(176, 84)
+        m = 4
+        self.win = (math.floor(x0) - m, math.floor(y0) - m, math.ceil(x1) + m, math.ceil(y1) + m)
+        wx0, wy0, wx1, wy1 = self.win
+        sk = Sketch(wx1 - wx0, wy1 - wy0, wx0, wy0)
+        sk.paint(self.ink, lambda d, s: s.rrect(d, x0, y0, x1, y1, KR_PANEL, KL))
+        self.win_line = sk.im
+        self.win_clip = Sketch(wx1 - wx0, wy1 - wy0, wx0, wy0).mask(lambda d, s: s.rrect(d, x0, y0, x1, y1, KR_PANEL))
+        self.win_dots = dots(wx1 - wx0, wy1 - wy0, wx0, wy0, 7, 1.5)
+
+    def packs(self, p):
+        """The tape on the two reels at progress p: radii trade area (26 -> 14 units and back)."""
+        a, b = 26.0, 14.0
+        rl = math.sqrt(max(b * b, a * a - (a * a - b * b) * p))
+        rr = math.sqrt(min(a * a, b * b + (a * a - b * b) * p))
+        key = (round(rl * 2) / 2, round(rr * 2) / 2)
+        if key not in self.pack_cache:
+            wx0, wy0, wx1, wy1 = self.win
+            sk = Sketch(wx1 - wx0, wy1 - wy0, wx0, wy0)
+            for (ux, uy), r in zip(self.REELS, key):
+                cx, cy = self.u(ux, uy)
+                sk.paint(self.ink, mask=_mul(sk.mask(lambda d, s: s.circle(d, cx, cy, r * self.S)), self.win_clip),
+                         pattern=self.win_dots)
+                sk.paint(self.ink, mask=_mul(sk.mask(lambda d, s: s.circle(d, cx, cy, r * self.S, KH)), self.win_clip))
+            sk.im.alpha_composite(self.win_line)
+            self.pack_cache[key] = sk.im
+        return self.pack_cache[key]
+
+    def reel(self, cx, cy, ang):
+        """A hub at (cx, cy) turned by ang degrees: (image, x, y) to paste."""
+        q = int(round(ang / 3)) * 3 % 60                 # six teeth: 60-degree symmetry
+        key = (cx, cy, q)
+        if key not in self.reel_cache:
+            r = 10 * self.S
+            box = math.ceil(r + KL) + 2
+            ox, oy = math.floor(cx) - box, math.floor(cy) - box
+            sk = Sketch(2 * box + 2, 2 * box + 2, ox, oy)
+            sk.paint(self.paper, lambda d, s: s.circle(d, cx, cy, r))
+
+            def ink(d, s):
+                s.circle(d, cx, cy, r, KL)
+                for k in range(6):
+                    a = math.radians(q + 60 * k)
+                    s.line(d, cx + 4 * self.S * math.sin(a), cy - 4 * self.S * math.cos(a),
+                           cx + 8 * self.S * math.sin(a), cy - 8 * self.S * math.cos(a), KH)
+            sk.paint(self.ink, ink)
+            self.reel_cache[key] = (sk.im, ox, oy)
+        return self.reel_cache[key]
+
+    def bar(self, h):
+        h = int(h)
+        if h not in self.bar_cache:
+            bw, sw = self.bw, KL
+            box_w, box_h = bw + 12, h + 12
+            ox, oy = -6, -(h + 6)                                # local: x 0..bw, y -h..0 (0 = floor)
+            sk = Sketch(box_w, box_h, ox, oy)
+            body = lambda d, s: s.rrect(d, 0, -h, bw, 4, KR_LABEL)  # noqa: E731  (runs under the floor line)
+            sk.paint(self.tint, body)
+            # the lattice is fixed to the floor and the pitch is a multiple of the period: every
+            # column shows the same dots, which stay put while the column grows
+            sk.paint(self.spot, body, pattern=dots(box_w, box_h, ox + self.ex0, oy + self.floor, self.PERIOD, 2.6))
+            sk.paint(self.ink, lambda d, s: s.rrect(d, 0, -h, bw, 4, KR_LABEL, sw))
+            im = sk.im.crop((0, 0, box_w, int(-oy)))           # nothing below the floor
+            self.bar_cache[h] = (im, ox, oy)
+        return self.bar_cache[h]
+
+    def frame_fn(self, levels):
+        hub = [self.u(*r) for r in self.REELS]
+        floor = round(self.floor)
+
+        def frame(k):
+            t = k / FPS
+            p = min(1.0, t / self.dur) if self.dur else 0.0
+            fr = self.bg.copy()
+            paste(fr, self.packs(p), self.win[0], self.win[1])
+            for (x, y), period in zip(hub, (2.4, 1.6)):
+                im, ox, oy = self.reel(x, y, -t / period * 360)
+                fr.paste(im, (ox, oy), im)
+            for i, v in enumerate(levels[k]):
+                h = round(self.hmin + (self.hmax - self.hmin) * float(v))
+                im, ox, oy = self.bar(h)
+                paste(fr, im, self.ex0 + i * self.pitch + ox, floor + oy)
+            w = round(p * (self.lx1 - self.lx0))
+            if w > 0:
+                part = self.prog.crop((0, 0, 4 + w + 2, self.prog.height))
+                fr.paste(part, self.prog_xy, part)
+            return fr
+        return frame
+
+
+def _mul(a, b):
+    """Intersect two L masks."""
+    return Image.fromarray((np.asarray(a, np.float32) * np.asarray(b, np.float32) / 255).astype(np.uint8), 'L')
+
+
 # ---------------------------------------------------------------- encoding
 
 def audio_info(song):
@@ -352,10 +686,10 @@ def encode(frames, n, song, out, seconds, codec, crf, maxrate, stamp):
         raise RuntimeError('ffmpeg could not encode the video')
 
 
-def render(song, out, label, side='A', length='', colors=None, seconds=None, stamp='', log=print):
+def render(song, out, label, side='A', length='', colors=None, seconds=None, stamp='', log=print, style='sticker'):
     """Write the player-strip MP4 to `out`. seconds: only the first N seconds (for tests).
-    Returns a short summary string."""
-    C = {k: rgb(v) for k, v in dict(DEFAULT_COLORS, **(colors or {})).items()}
+    Returns a short summary string. style: 'sticker' (the deck card) or 'komik' (a comic strip:
+    colors then holds the four komik colours paper/ink/spot/tint)."""
     x, sr = decode(song)
     dur = len(x) / sr
     if not dur:
@@ -368,20 +702,24 @@ def render(song, out, label, side='A', length='', colors=None, seconds=None, sta
     for k in range(min(n, FPS * 2)):
         levels[k] = np.maximum(levels[k], rest * math.exp(-k / FPS / .45))
 
-    bg = background(C['deck'], C['cream'])
-    deck = Deck(C, label, side, length, 40, 48, 2.0)
-    eq = Equalizer(910, 216, [C['kuning'], C['mint'], C['langit'], C['pink'], C['jeruk']],
-                   C['cream'], C['ink'] + (90,))
-    line = ThinLine(40, 1240, 290, dur, C['cream'], C['deck'])
-    line.static(bg)
+    if style == 'komik':
+        frame = KomikStrip(colors, label, side, length, dur).frame_fn(levels)
+    else:
+        C = {k: rgb(v) for k, v in dict(DEFAULT_COLORS, **(colors or {})).items()}
+        bg = background(C['deck'], C['cream'])
+        deck = Deck(C, label, side, length, 40, 48, 2.0)
+        eq = Equalizer(910, 216, [C['kuning'], C['mint'], C['langit'], C['pink'], C['jeruk']],
+                       C['cream'], C['ink'] + (90,))
+        line = ThinLine(40, 1240, 290, dur, C['cream'], C['deck'])
+        line.static(bg)
 
-    def frame(k):
-        t = k / FPS
-        fr = bg.copy()
-        deck.draw(fr, t, t / dur)
-        eq.draw(fr, levels[k])
-        line.draw(fr, t)
-        return fr
+        def frame(k):
+            t = k / FPS
+            fr = bg.copy()
+            deck.draw(fr, t, t / dur)
+            eq.draw(fr, levels[k])
+            line.draw(fr, t)
+            return fr
 
     codec, abr = audio_info(song)
     audio_bits = (abr if codec == 'aac' else 160000) * total

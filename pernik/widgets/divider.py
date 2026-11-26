@@ -33,6 +33,8 @@ NOT_OFFERED = ('parang', 'lereng', 'parang-rusak', 'parang-barong', 'udan-liris'
                              'animate': True, 'seed': None})
 def divider(opts, ctx):
     """A section divider: wavy ribbon, dots, or a batik band (kawung, truntum, mega-mendung, sekar-jagad)."""
+    if ctx.pal.style == 'komik':
+        from ._komik_divider import render; return render(opts, ctx)
     pal = ctx.pal
     style = str(opts.get('style') or 'wave').strip().lower().replace('_', '-').replace(' ', '-')
     style = {'megamendung': 'mega-mendung', 'mega': 'mega-mendung', 'sekarjagad': 'sekar-jagad',

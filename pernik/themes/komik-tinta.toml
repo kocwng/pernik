@@ -1,0 +1,17 @@
+# komik with a different spot colour: Ink only (one colour, like a photocopy).
+extends = "komik"
+accents = ["#1C1520", "#1C1520", "#CFC8D4"]
+name = "komik-tinta"
+
+[komik]
+paper = "#F7F5F4"
+spot = "#1C1520"
+tint = "#CFC8D4"
+
+[colors]
+pink = "#1C1520"
+jeruk = "#1C1520"
+mint = "#1C1520"
+langit = "#1C1520"
+kuning = "#CFC8D4"
+cream = "#F7F5F4"

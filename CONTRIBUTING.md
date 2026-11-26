@@ -4,6 +4,8 @@ Thank you for helping! You can add three kinds of things: themes, widgets and ma
 
 ## Ground rules for every picture
 
+The default style has its own design rules in [docs/design.md](docs/design.md): four colours, three line weights, an 8-px grid, three type roles, and every ornament needs a reason. Please read them before drawing anything. In code, use the kit in `pernik/komik.py` instead of hand-writing colours and strokes.
+
 GitHub shows README pictures through its image proxy, inside `<img>`. So every SVG must:
 
 - be self-contained: no scripts, no `<foreignObject>`, no outside images, fonts or CSS;
@@ -16,7 +18,7 @@ GitHub shows README pictures through its image proxy, inside `<img>`. So every S
 
 ## Add a theme
 
-Copy `pernik/themes/pastel.toml`. Use `extends = "pernik"` and change only what you need: `accents`, `[colors]`, `[sticker]`, `[light]` and `[dark]`. Then build the example profile with your theme and check the preview:
+Copy `pernik/themes/komik-laut.toml` (komik style) or `pastel.toml` (sticker style). Use `extends` and change only what you need: `accents`, `[colors]`, `[sticker]`, `[light]` and `[dark]`. Then build the example profile with your theme and check the preview:
 
 ```bash
 python3 -m pernik preview examples/profile/pernik.toml

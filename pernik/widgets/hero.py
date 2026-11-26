@@ -29,6 +29,8 @@ def hero(opts, ctx):
     chords    optional path to a chords.json; the banana's chord card and fretting follow it
     beat      seconds per strum when there is no chords.json (default 1.17)
     """
+    if ctx.pal.style == 'komik':
+        from ._komik_hero import render; return render(opts, ctx)
     pal = ctx.pal
     s = swatch(pal)
     say = ctx.log if ctx.mode == 'light' else (lambda *a: None)   # warn once, not per mode

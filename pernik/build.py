@@ -72,7 +72,10 @@ def build(config_path, only=None, quiet=False):
                 results[mode] = spec.fn(opts, ctx)
                 written += ctx.written
         except ImportError as e:
-            problems.append(f'{wid}: needs an extra package ({e.name}). Install pernik[{kind}] or see the docs.')
+            if (e.name or '').split('.')[0] in ('numpy', 'scipy', 'PIL'):
+                problems.append(f'{wid}: needs an extra package ({e.name}). Install pernik[{kind}] or see the docs.')
+            else:
+                problems.append(f'{wid}: ImportError: {e}')
             continue
         except Exception as e:  # one broken widget shouldn't stop the others
             problems.append(f'{wid}: {type(e).__name__}: {e}')

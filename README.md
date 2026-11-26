@@ -7,7 +7,10 @@
 - **Yours.** Patterns are generated from your username, so your batik doesn't look like anyone else's. Themes change every colour at once.
 - **README-safe.** No scripts and no outside files, just CSS animation. `pernik check` makes sure of it.
 
-![Example profile](docs/example.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/example-dark.png" />
+  <img src="docs/example.png" width="600" alt="An example profile made with Pernik: a hero card with a banana playing ukulele, a kawung batik divider, numbered section headings, a grid of tech-stack panels, a cassette tape player and a thank-you caption bar, all in pink and black ink on paper." />
+</picture>
 
 ## Quick start
 
@@ -70,15 +73,32 @@ Run `python3 -m pernik list` for every option.
 
 The batik dividers are procedural designs *inspired by* traditional motifs. [docs/motifs.md](docs/motifs.md) explains where each motif comes from.
 
-## Themes
+## Looks and themes
 
-Set `theme = "pernik"` (the default), `"sogan"` (earthy batik browns and indigo) or `"pastel"` at the top of `pernik.toml`. You can also make your own theme by changing a few colours of an existing one:
+Pernik has two drawing styles. You pick one by picking a theme.
+
+**komik** (the default): a two-colour risograph comic page. Black ink and one spot colour on soft paper, laid out in manga panels, with halftone dots, a hearts row, an EXP bar and kamboja petals. It follows strict design rules ([docs/design.md](docs/design.md)): four colours, three line weights, an 8-px grid, and three type roles. Every widget is printed on its own paper card, so it looks the same on GitHub light and dark.
+
+| Theme | Spot colour |
+|---|---|
+| `komik` | magenta |
+| `komik-laut` | sea blue |
+| `komik-daun` | leaf green |
+| `komik-jeruk` | orange |
+| `komik-tinta` | ink only, like a photocopy |
+
+**stiker**: bright die-cut stickers with cream outlines on a transparent background. Its themes are `stiker`, `sogan` (batik browns and indigo) and `pastel`.
+
+To make your own theme, change a few values of an existing one:
 
 ```toml
 # my-theme.toml
-extends = "pernik"
+extends = "komik"
 name = "mine"
-accents = ["#E76F51", "#2A9D8F", "#E9C46A", "#264653"]
+
+[komik]
+spot = "#7A4DD8"
+tint = "#D9CBF5"
 ```
 
 Then use it with `theme = "my-theme.toml"`.

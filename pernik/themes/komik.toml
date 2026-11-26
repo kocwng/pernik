@@ -1,0 +1,52 @@
+# "komik": a two-colour risograph comic page. Black ink and one spot colour on soft paper,
+# laid out in panels. The default Pernik look. Rules: docs/design.md
+name = "komik"
+schema = 1
+style = "komik"
+# Kept so code written for the sticker style still finds colours.
+accents = ["#E0569B", "#1C1520", "#F4BCD8"]
+
+# The four komik colours. Every widget uses only these (plus halftones of them).
+[komik]
+paper = "#FAF3F8"
+ink = "#1C1520"
+spot = "#E0569B"
+tint = "#F4BCD8"
+
+[colors]
+jeruk = "#E0569B"
+pink = "#E0569B"
+kuning = "#F4BCD8"
+mint = "#E0569B"
+langit = "#E0569B"
+anggur = "#1C1520"
+cream = "#FAF3F8"
+ink = "#1C1520"
+
+[font]
+display = "'Arial Rounded MT Bold', 'Nunito', 'Varela Round', sans-serif"
+label = "'Arial Black', 'Helvetica Neue', Arial, sans-serif"
+mono = "ui-monospace, 'SF Mono', Menlo, Consolas, monospace"
+round = "'Arial Rounded MT Bold', 'Nunito', 'Varela Round', sans-serif"
+body = "'Helvetica Neue', Arial, sans-serif"
+
+[sticker]
+outline = 4
+shadow_dx = 4
+shadow_dy = 4
+
+[light]
+page = "#ffffff"
+outline = "#1C1520"
+shadow = "#1C1520"
+shadow_opacity = 1
+text = "#1C1520"
+muted = "#57606a"
+
+[dark]
+page = "#0d1117"
+outline = "#1C1520"
+shadow = "#1C1520"
+shadow_opacity = 1
+text = "#1C1520"
+muted = "#8b949e"

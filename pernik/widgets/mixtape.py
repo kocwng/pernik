@@ -15,7 +15,9 @@
     make_video = false               # also render <output>/<id>.mp4 to upload
 
 What it makes:
-  - the cassette sticker (one SVG for both GitHub themes) that links to `link`;
+  - the cassette sticker (one SVG for both GitHub themes) that links to `link`; with a komik
+    theme (style = "komik") a two-panel comic card instead (_komik_mixtape.py), and the page
+    and the video switch to their komik look too;
   - a tape player page in `page_dir`: index.html + tape.json (settings) + chords.json, which
     GitHub Pages serves at https://<user>.github.io/<repo>/<page_dir minus pages>/;
   - with chords = "auto", chords.json is worked out from the song whenever the song file
@@ -280,7 +282,12 @@ def mixtape(opts, ctx):
     t = settings(opts, ctx)
     if ctx.mode == 'light':                  # extra files only once per build
         make_files(t, ctx)
-    out = Out(svg=cassette_svg(t, ctx.pal), alt=sentence(' '.join(t['caption'])) + ' Play the recording.',
+    if ctx.pal.style == 'komik':
+        from ._komik_mixtape import komik_svg
+        svg = komik_svg(t, ctx.theme)
+    else:
+        svg = cassette_svg(t, ctx.pal)
+    out = Out(svg=svg, alt=sentence(' '.join(t['caption'])) + ' Play the recording.',
               href=t['link'], same=True)
     if t['video']:
         # the README shows GitHub's video player instead of the cassette picture
@@ -421,10 +428,16 @@ def make_files(t, ctx):
                    'jeruk': pal.color('jeruk'), 'pink': pal.color('pink'), 'kuning': pal.color('kuning'),
                    'mint': pal.color('mint'), 'langit': pal.color('langit'), 'anggur': pal.color('anggur'),
                    'round': pal.font_round, 'body': pal.font_body},
+        'style': pal.style,
     }
+    if pal.style == 'komik':
+        page['komik'] = komik_colors(ctx.theme, fonts=True)
     ctx.write(posixpath.join(t['page_dir'], 'tape.json'), json.dumps(page, indent=2, ensure_ascii=False) + '\n')
     with open(PAGE, encoding='utf-8') as f:
-        ctx.write(index, f.read())
+        html = f.read()
+    if pal.style == 'komik':      # start in the right look (tape.json still decides, once loaded)
+        html = html.replace('<html lang="en">', '<html lang="en" class="komik">', 1)
+    ctx.write(index, html)
     where = t['page_url'] or t['page_dir']
     ctx.log(f'tape player page: {t["page_dir"]}/ -> {where}')
     if t['make_video']:
@@ -484,19 +497,23 @@ def make_video(t, ctx):
         ctx.log(f'video: {why}, so {rel} was not made. Turn on make_video in the GitHub Action instead.')
         return
     pal = ctx.pal
-    colors = {'deck': pal.color('anggur'), 'cream': pal.color('cream', '#FFF6E5'), 'ink': pal.color('ink', '#2B2340'),
-              'pink': pal.color('pink'), 'kuning': pal.color('kuning'), 'mint': pal.color('mint'),
-              'langit': pal.color('langit'), 'jeruk': pal.color('jeruk')}
+    style = 'komik' if pal.style == 'komik' else 'sticker'
+    if style == 'komik':
+        colors = komik_colors(ctx.theme)
+    else:
+        colors = {'deck': pal.color('anggur'), 'cream': pal.color('cream', '#FFF6E5'), 'ink': pal.color('ink', '#2B2340'),
+                  'pink': pal.color('pink'), 'kuning': pal.color('kuning'), 'mint': pal.color('mint'),
+                  'langit': pal.color('langit'), 'jeruk': pal.color('jeruk')}
     seconds = float(os.environ.get('PERNIK_VIDEO_SECONDS') or 0) or None    # test hook: a short clip
     stamp = hashlib.sha1(json.dumps([sha1(t['song_abs']), t['label'], t['side'], t['length'], colors,
-                                     seconds, vid.W, vid.H, 1]).encode()).hexdigest()[:16]
+                                     seconds, vid.W, vid.H, 1] + ([style] if style != 'sticker' else [])).encode()).hexdigest()[:16]
     if vid.stamp_of(path) == stamp:
         ctx.log(f'video: {rel} is up to date')
     else:
         ctx.log(f'video: rendering {rel} (this takes a while)...')
         try:
             info = vid.render(t['song_abs'], path, t['label'], t['side'], t['length'], colors,
-                              seconds=seconds, stamp=stamp, log=ctx.log)
+                              seconds=seconds, stamp=stamp, log=ctx.log, style=style)
         except Exception as e:
             ctx.log(f'! video: could not render ({type(e).__name__}: {e})')
             return
@@ -514,6 +531,16 @@ def make_video(t, ctx):
                 '    2. GitHub inserts a https://github.com/user-attachments/assets/... link. Copy it,\n'
                 '       then cancel the edit (do not commit it there).\n'
                 f'    3. In pernik.toml set video = "<that link>" (and make_video = false) for "{ctx.widget_id}".')
+
+
+def komik_colors(theme, fonts=False):
+    """The four komik colours (and, for the page, the three type roles) from the theme."""
+    from .. import komik as K
+    k = K.Kit(theme)
+    out = {'paper': k.paper, 'ink': k.ink, 'spot': k.spot, 'tint': k.tint}
+    if fonts:
+        out.update(display=k.f_display, label=k.f_label, mono=k.f_mono)
+    return out
 
 
 def video_markdown(t):

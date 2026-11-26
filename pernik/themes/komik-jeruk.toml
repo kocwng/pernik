@@ -1,0 +1,17 @@
+# komik with a different spot colour: Orange.
+extends = "komik"
+accents = ["#E8682E", "#1C1520", "#F8C8AE"]
+name = "komik-jeruk"
+
+[komik]
+paper = "#FCF5F0"
+spot = "#E8682E"
+tint = "#F8C8AE"
+
+[colors]
+pink = "#E8682E"
+jeruk = "#E8682E"
+mint = "#E8682E"
+langit = "#E8682E"
+kuning = "#F8C8AE"
+cream = "#FCF5F0"

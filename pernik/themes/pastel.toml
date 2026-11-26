@@ -1,5 +1,5 @@
 # Softer colours with thinner outlines.
-extends = "pernik"
+extends = "stiker"
 name = "pastel"
 accents = ["#FFB38A", "#FF9CC8", "#FFE28A", "#8FE3BE", "#9ADCF5", "#B3A1FF"]
 
