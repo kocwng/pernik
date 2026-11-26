@@ -27,7 +27,7 @@ outputs:
 runs:
   using: composite
   steps:
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v7
       with:
         python-version: "3.12"
 
@@ -126,7 +126,7 @@ runs:
 
     - name: Attach the video
       if: steps.paths.outputs.videos != ''
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: pernik-video
         path: ${{ steps.paths.outputs.videos }}
