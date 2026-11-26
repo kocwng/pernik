@@ -42,8 +42,11 @@ CHIP_LOGO = 28
 
 
 def render(opts, ctx):
-    if str(opts.get('density', 'panels')).strip().lower() == 'compact':
+    density = str(opts.get('density', 'panels')).strip().lower()
+    if density == 'compact':
         return render_compact(opts, ctx)
+    if density == 'manga':
+        return render_manga(opts, ctx)
     k = K.Kit(ctx.theme, ctx.mode)
     say = ctx.log if ctx.mode == 'light' else (lambda *a: None)
     icons = opts.get('icons') or []
@@ -294,6 +297,103 @@ def render_compact(opts, ctx):
     svg = k.doc(W, h, k.card(0, 0, W, h) + ''.join(chips), title=title,
                 desc=f'{len(items)} tools as small labelled chips: ' + ', '.join(names) + '.' if names else 'No tools listed yet.',
                 css=k.css_arrive(delay_step=.05, count=8))
+    if len(svg.encode()) > 25 * 1024:
+        say(f'{len(svg.encode()) // 1024} KB, over the 25 KB budget; try fewer icons')
+    return Out(svg=svg, alt=title)
+
+
+# ---------------------------------------------------------------- density = "manga"
+# A manga page: every row is filled edge to edge (no empty slots), and the panels in a row are
+# split by slanted gutters. Logo first, the name small underneath.
+
+MANGA_ROW = 92     # row height
+MANGA_GUT = 10     # gutter between panels (and rows)
+MANGA_SLANT = 9    # how far a gutter leans (px each side of the middle)
+MANGA_LOGO = 40
+MANGA_MAX = 6      # panels per row at most
+
+
+def _row_counts(n_items, most):
+    """Split n items into the fewest rows of at most `most`, as evenly as possible (7 -> 4+3)."""
+    rows = max(1, math.ceil(n_items / most))
+    base, extra = divmod(n_items, rows)
+    return [base + (1 if r < extra else 0) for r in range(rows)]
+
+
+def render_manga(opts, ctx):
+    k = K.Kit(ctx.theme, ctx.mode)
+    say = ctx.log if ctx.mode == 'light' else (lambda *a: None)
+    icons = opts.get('icons') or []
+    if isinstance(icons, str):
+        icons = [i for i in re.split(r'[,\s]+', icons) if i]
+    icons = [str(i).strip() for i in icons if str(i).strip()][:48]
+    try:
+        most = int(opts.get('columns') or 0)
+    except (TypeError, ValueError):
+        most = 0
+    most = max(3, min(8, most)) if most else MANGA_MAX
+    idx = _index(ctx.root, say) if icons else {}
+    logos = opts.get('logos') or {}
+    logos = logos if isinstance(logos, dict) else {}
+    items = [resolve(raw, ctx, idx, logos, say) for raw in icons]
+
+    counts = _row_counts(len(items), most) if items else [0]
+    h = 2 * PAD + len(counts) * MANGA_ROW + (len(counts) - 1) * MANGA_GUT
+    left, right = PAD, W - PAD
+    rng = random.Random(ctx.seed)
+    out, i = [], 0
+    for r, m in enumerate(counts):
+        top = PAD + r * (MANGA_ROW + MANGA_GUT)
+        bot = top + MANGA_ROW
+        lean = MANGA_SLANT if (r + rng.randrange(2)) % 2 else -MANGA_SLANT    # rows lean different ways
+        tone = rng.randrange(m) if m > 2 else -1                              # one toned panel per row
+        for j in range(m):
+            title, d, box, _, rule = items[i]
+            x0 = left + (right - left) * j / m
+            x1 = left + (right - left) * (j + 1) / m
+            # inner edges lean; the card's outer edges stay straight
+            lt, lb = (x0, x0) if j == 0 else (x0 + lean + MANGA_GUT / 2, x0 - lean + MANGA_GUT / 2)
+            rt, rb = (x1, x1) if j == m - 1 else (x1 + lean - MANGA_GUT / 2, x1 - lean - MANGA_GUT / 2)
+            pts = f'{n(lt)},{n(top)} {n(rt)},{n(top)} {n(rb)},{n(bot)} {n(lb)},{n(bot)}'
+            fill = 'url(#ht1)' if j == tone else k.paper
+            cx = (lt + rt + lb + rb) / 4
+            g = [f'<polygon points="{pts}" fill="{fill}" stroke="{k.ink}" stroke-width="{K.LINE}" '
+                 f'stroke-linejoin="round"/>']
+            ly = top + 12
+            if d:
+                # wide logos (wordmarks) may use up to twice the height in width
+                bx, by, bw, bh = box
+                sc = min(MANGA_LOGO * 2 / bw, MANGA_LOGO / bh)
+                ox = cx - bw * sc / 2 - bx * sc
+                oy = ly + (MANGA_LOGO - bh * sc) / 2 - by * sc
+                tf = f'translate({n(ox)} {n(oy)}) scale({sc:.4f})'
+                path = compact_path(d) if box == (0, 0, 24, 24) else d
+                fr = f' fill-rule="{rule}"' if rule else ''
+                g.append(f'<path transform="{tf}" d="{path}" fill="{k.ink}"{fr} stroke="{k.paper}" '
+                         f'stroke-width="{4 / sc:.2f}" stroke-linejoin="round" paint-order="stroke"/>')
+            else:
+                word = re.sub(r'[^A-Za-z0-9]', '', title).upper()
+                mono = word if 1 < len(word) <= 4 else (word[:1] or '?')
+                fs = {1: 32, 2: 26, 3: 22, 4: 18}[len(mono)]
+                g.append(f'<text x="{n(cx)}" y="{n(ly + MANGA_LOGO / 2 + fs * .36)}" font-size="{fs}" '
+                         f'text-anchor="middle" class="kl" fill="{k.ink}" stroke="{k.paper}" stroke-width="4" '
+                         f'paint-order="stroke">{K.esc(mono)}</text>')
+            room = min(rt, rb) - max(lt, lb) - 14
+            shown, size = fit_label(title, room, 11, 7.5)
+            # a paper halo keeps the name readable on the toned panel
+            g.append(label_text(cx, bot - 13, shown, size, k.ink, 'middle').replace(
+                '<text ', f'<text stroke="{k.paper}" stroke-width="3.5" stroke-linejoin="round" paint-order="stroke" ', 1))
+            out.append(f'<g class="arrive a{min(i, 7)}">{"".join(g)}</g>')
+            i += 1
+    if not items:
+        out.append(f'<text x="{W / 2:g}" y="{h / 2 + 5:g}" font-size="14" text-anchor="middle" class="km" '
+                   f'fill="{k.ink}">no tools listed yet</text>')
+    names = [t[0] for t in items]
+    title = 'Tech stack: ' + ', '.join(names) if names else 'Tech stack'
+    svg = k.doc(W, h, k.card(0, 0, W, h) + ''.join(out), title=title,
+                desc=(f'{len(items)} tools as comic panels split by slanted gutters: ' + ', '.join(names) + '.')
+                if names else 'No tools listed yet.',
+                css=k.css_arrive(delay_step=.04, count=8))
     if len(svg.encode()) > 25 * 1024:
         say(f'{len(svg.encode()) // 1024} KB, over the 25 KB budget; try fewer icons')
     return Out(svg=svg, alt=title)
