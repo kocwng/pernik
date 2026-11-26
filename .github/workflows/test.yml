@@ -1,0 +1,42 @@
+# Tests Pernik itself: unit tests on the oldest and newest supported Python, then the
+# Action from this repo on the example profile (nothing is committed).
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m unittest discover -s tests -v
+
+  action:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run the Pernik Action on the example profile
+        id: pernik
+        uses: ./
+        with:
+          config: examples/profile/pernik.toml
+          commit: false
+      - name: Check the result
+        run: |
+          python -m pernik check examples/profile/pernik.toml
+          test -f examples/profile/pernik/hello-dark.svg
+          test -f examples/profile/docs/tape/index.html
+          echo "changed: ${{ steps.pernik.outputs.changed }}"
