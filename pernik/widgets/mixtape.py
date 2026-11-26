@@ -284,11 +284,11 @@ def mixtape(opts, ctx):
         make_files(t, ctx)
     if ctx.pal.style == 'komik':
         from ._komik_mixtape import komik_svg
-        svg = komik_svg(t, ctx.theme)
+        svg = komik_svg(t, ctx.theme, ctx.mode)
     else:
         svg = cassette_svg(t, ctx.pal)
     out = Out(svg=svg, alt=sentence(' '.join(t['caption'])) + ' Play the recording.',
-              href=t['link'], same=True)
+              href=t['link'], same=ctx.pal.style != 'komik')
     if t['video']:
         # the README shows GitHub's video player instead of the cassette picture
         out.markdown = video_markdown(t)
@@ -533,11 +533,15 @@ def make_video(t, ctx):
                 f'    3. In pernik.toml set video = "<that link>" (and make_video = false) for "{ctx.widget_id}".')
 
 
-def komik_colors(theme, fonts=False):
-    """The four komik colours (and, for the page, the three type roles) from the theme."""
+def komik_colors(theme, fonts=False, mode='light'):
+    """The komik colours (and, for the page, the three type roles) from the theme.
+    With fonts=True (the page) the dark-mode colours come along under 'dark'."""
     from .. import komik as K
-    k = K.Kit(theme)
-    out = {'paper': k.paper, 'ink': k.ink, 'spot': k.spot, 'tint': k.tint}
+    k = K.Kit(theme, mode)
+    out = {'paper': k.paper, 'ink': k.ink, 'spot': k.spot, 'tint': k.tint, 'shade': k.shade,
+           'solid': k.solid, 'on_solid': k.on_solid}
+    if fonts and mode == 'light':
+        out['dark'] = komik_colors(theme, mode='dark')
     if fonts:
         out.update(display=k.f_display, label=k.f_label, mono=k.f_mono)
     return out

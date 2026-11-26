@@ -1,7 +1,7 @@
 """The mixtape card in the "komik" style (docs/design.md): a two-panel comic strip.
 
     from ._komik_mixtape import komik_svg
-    svg = komik_svg(t, ctx.theme)        # t = mixtape settings(); one file for light and dark
+    svg = komik_svg(t, ctx.theme, ctx.mode)   # t = mixtape settings(); one file per GitHub theme
 
     +----------------------------------------------------------------------------+
     | +-----------------------+  +[ "give it a listen!" ]-------- SIDE A · 0:49 -+ |
@@ -84,8 +84,8 @@ def play_button(k, x, y, s=64):
             f'<path d="{tri}" fill="{k.ink}" stroke="{k.ink}" stroke-width="{K.LINE}" stroke-linejoin="round"/>')
 
 
-def komik_svg(t, theme):
-    k = K.Kit(theme)
+def komik_svg(t, theme, mode='light'):
+    k = K.Kit(theme, mode)
     side, length = t['side'], t['length']
     caption = ' '.join(t['caption'])
     body = [k.card(0, 0, W, H)]

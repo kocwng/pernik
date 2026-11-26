@@ -84,12 +84,7 @@
                 radial-gradient(var(--tint) 1.1px, transparent 1.6px) 4px 4px / 8px 8px, var(--paper);
     color: var(--ink); font: 14px/1.5 var(--mono);
   }
-  @media (prefers-color-scheme: dark) {
-    html.komik body {
-      background: radial-gradient(color-mix(in srgb, var(--spot) 22%, var(--ink)) 1.1px, transparent 1.6px) 0 0 / 8px 8px,
-                  radial-gradient(color-mix(in srgb, var(--spot) 22%, var(--ink)) 1.1px, transparent 1.6px) 4px 4px / 8px 8px, var(--ink);
-    }
-  }
+  /* dark mode: the page gets the theme's night-print colours (tape.json komik.dark) */
   html.komik main {
     width: min(720px, 100%); text-align: left; background: var(--paper); color: var(--ink);
     border: 4px solid var(--ink); border-radius: 6px; padding: 24px;
@@ -100,7 +95,7 @@
 
   html.komik h1 {
     font: 900 clamp(20px, 5vw, 32px)/1 var(--label); text-transform: uppercase; letter-spacing: .04em;
-    background: var(--ink); color: var(--paper); border-radius: 2px; padding: 12px 16px; margin: 0 0 16px;
+    background: var(--solid, var(--ink)); color: var(--on-solid, var(--paper)); border-radius: 2px; padding: 12px 16px; margin: 0 0 16px;
   }
 
   html.komik .deck {
@@ -129,7 +124,7 @@
   }
   html.komik .chord[hidden] { display: none; }
   html.komik .chord .tag {
-    display: block; position: absolute; left: 0; top: 0; background: var(--ink); color: var(--paper);
+    display: block; position: absolute; left: 0; top: 0; background: var(--solid, var(--ink)); color: var(--on-solid, var(--paper));
     font-size: 11px; line-height: 1; padding: 6px 8px 5px; border-radius: 0 0 2px 0;
   }
   html.komik .chord .name {
@@ -163,7 +158,7 @@
     background: var(--paper); overflow: hidden;
   }
   html.komik .seek .tab {
-    display: flex; align-items: center; flex: none; padding: 0 16px; background: var(--ink); color: var(--paper);
+    display: flex; align-items: center; flex: none; padding: 0 16px; background: var(--solid, var(--ink)); color: var(--on-solid, var(--paper));
     font: 600 13px/1 var(--mono); border-radius: 99px;
   }
   html.komik .seek .rail { position: relative; flex: 1; margin: 4px; }
@@ -258,9 +253,15 @@
     COLORS = ['--kuning', '--mint', '--langit', '--pink', '--jeruk'].map(css);
   }
   function applyKomik(k) {
-    for (const n of ['paper', 'ink', 'spot', 'tint']) {
-      if (k && /^#[0-9a-f]{6}$/i.test(k[n] || '')) root.style.setProperty('--' + n, k[n]);
-    }
+    // light colours, and the night-print colours for dark mode, as CSS variables
+    const ok = v => /^#[0-9a-f]{6}$/i.test(v || '');
+    const vars = o => ['paper', 'ink', 'spot', 'tint', 'shade', 'solid', 'on_solid']
+      .filter(n => o && ok(o[n])).map(n => `--${n.replace('_', '-')}:${o[n]}`).join(';');
+    let rules = `html.komik{${vars(k)}}`;
+    if (k && k.dark) rules += `@media (prefers-color-scheme: dark){html.komik{${vars(k.dark)}}}`;
+    const st = document.createElement('style');
+    st.textContent = rules;
+    document.head.appendChild(st);
     for (const n of ['display', 'label', 'mono']) if (k && k[n]) root.style.setProperty('--' + n, k[n]);
   }
 

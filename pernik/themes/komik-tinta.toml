@@ -8,6 +8,17 @@ paper = "#F7F5F4"
 spot = "#1C1520"
 tint = "#CFC8D4"
 
+# Dark mode: a night print. Dark paper that sits close to GitHub's dark page, soft light
+# lines instead of white, and a deeper tint so large areas don't glare.
+[komik.dark]
+paper = "#161B22"
+ink = "#A9B2BD"
+spot = "#C9D1D9"
+tint = "#2A3038"
+shade = "#010409"
+solid = "#3B434E"
+on_solid = "#F2E9EF"
+
 [colors]
 pink = "#1C1520"
 jeruk = "#1C1520"

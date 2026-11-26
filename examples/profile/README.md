@@ -1,13 +1,22 @@
 <!-- pernik:hello -->
-<img src="./pernik/hello.svg" width="100%" alt="hello there! (a banana strums a ukulele)" />
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./pernik/hello-dark.svg" />
+  <img src="./pernik/hello-light.svg" width="100%" alt="hello there! (a banana strums a ukulele)" />
+</picture>
 <!-- /pernik:hello -->
 
 <!-- pernik:line-kawung -->
-<img src="./pernik/line-kawung.svg" width="100%" alt="Kawung batik divider" />
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./pernik/line-kawung-dark.svg" />
+  <img src="./pernik/line-kawung-light.svg" width="100%" alt="Kawung batik divider" />
+</picture>
 <!-- /pernik:line-kawung -->
 
 <!-- pernik:about-title -->
-<img src="./pernik/about-title.svg" width="100%" alt="chapter 1: about me" />
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./pernik/about-title-dark.svg" />
+  <img src="./pernik/about-title-light.svg" width="100%" alt="chapter 1: about me" />
+</picture>
 <!-- /pernik:about-title -->
 
 Hi! This is an example profile made with [Pernik](../../README.md). Everything you see
@@ -18,23 +27,38 @@ here comes from `pernik.toml`; this text is the only part written by hand.
 - 💬 Ask me about anything
 
 <!-- pernik:stack-title -->
-<img src="./pernik/stack-title.svg" width="100%" alt="chapter 2: tech stack" />
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./pernik/stack-title-dark.svg" />
+  <img src="./pernik/stack-title-light.svg" width="100%" alt="chapter 2: tech stack" />
+</picture>
 <!-- /pernik:stack-title -->
 
 <!-- pernik:stack -->
-<img src="./pernik/stack.svg" width="100%" alt="Tech stack: Python, Go, Docker, PostgreSQL, Git, Figma" />
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./pernik/stack-dark.svg" />
+  <img src="./pernik/stack-light.svg" width="100%" alt="Tech stack: Python, Go, Docker, PostgreSQL, Git, Figma" />
+</picture>
 <!-- /pernik:stack -->
 
 <!-- pernik:tape -->
 <a href="https://octocat.github.io/octocat/tape/">
-<img src="./pernik/tape.svg" width="100%" alt="Give it a listen! Play the recording." />
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./pernik/tape-dark.svg" />
+  <img src="./pernik/tape-light.svg" width="100%" alt="Give it a listen! Play the recording." />
+</picture>
 </a>
 <!-- /pernik:tape -->
 
 <!-- pernik:line-mega -->
-<img src="./pernik/line-mega.svg" width="100%" alt="Mega mendung batik divider" />
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./pernik/line-mega-dark.svg" />
+  <img src="./pernik/line-mega-light.svg" width="100%" alt="Mega mendung batik divider" />
+</picture>
 <!-- /pernik:line-mega -->
 
 <!-- pernik:bye -->
-<img src="./pernik/bye.svg" width="100%" alt="thanks for stopping by!" />
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./pernik/bye-dark.svg" />
+  <img src="./pernik/bye-light.svg" width="100%" alt="thanks for stopping by!" />
+</picture>
 <!-- /pernik:bye -->

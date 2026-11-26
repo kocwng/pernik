@@ -26,6 +26,18 @@
     "ink": "#1C1520",
     "spot": "#E0569B",
     "tint": "#F4BCD8",
+    "shade": "#1C1520",
+    "solid": "#1C1520",
+    "on_solid": "#FAF3F8",
+    "dark": {
+      "paper": "#161B22",
+      "ink": "#A9B2BD",
+      "spot": "#E0619F",
+      "tint": "#3F2136",
+      "shade": "#010409",
+      "solid": "#6B2C55",
+      "on_solid": "#F2E9EF"
+    },
     "display": "'Arial Rounded MT Bold', 'Nunito', 'Varela Round', sans-serif",
     "label": "'Arial Black', 'Helvetica Neue', Arial, sans-serif",
     "mono": "ui-monospace, 'SF Mono', Menlo, Consolas, monospace"

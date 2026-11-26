@@ -86,7 +86,7 @@ def _block_h(n, f):
 
 
 def render(opts, ctx):
-    k = K.Kit(ctx.theme)
+    k = K.Kit(ctx.theme, ctx.mode)
     say = ctx.log if ctx.mode == 'light' else (lambda *a: None)
 
     greeting = opts.get('greeting') or ['hello!']
@@ -216,7 +216,7 @@ def render(opts, ctx):
     svg = k.doc(W, H, ''.join(body), title=title, desc=d, css=''.join(css))
     if len(svg.encode()) > 25 * 1024:
         say(f'{len(svg.encode()) // 1024} KB, over the 25 KB budget (a shorter chords.json helps)')
-    return Out(svg=svg, alt=title + (' (a banana strums a ukulele)' if has_m else ''), same=True)
+    return Out(svg=svg, alt=title + (' (a banana strums a ukulele)' if has_m else ''))
 
 
 def _chord_tag(k, chords, css):
@@ -228,12 +228,12 @@ def _chord_tag(k, chords, css):
     tw = max(len(c) * K.LABEL_ADV * size * 1.04 for c in names)
     w = max(48, int((tw + 24 + 7) // 8 * 8))
     x, y, h = PX + 16, PY + 16, 32
-    out = [f'<g class="arrive a3"><rect x="{x}" y="{y}" width="{w}" height="{h}" rx="{K.R_LABEL}" fill="{k.ink}" '
+    out = [f'<g class="arrive a3"><rect x="{x}" y="{y}" width="{w}" height="{h}" rx="{K.R_LABEL}" fill="{k.solid}" '
            f'stroke="{k.ink}" stroke-width="{K.LINE}"/>']
     for gi, c in enumerate(names):
         fs = K.fit_label(c, w - 16, size)
         out.append(f'<text class="kl kc kc{gi}" x="{x + w / 2:g}" y="{y + h / 2 + fs * .36:g}" font-size="{fs:g}" '
-                   f'text-anchor="middle" fill="{k.paper}">{K.esc(c)}</text>')
+                   f'text-anchor="middle" fill="{k.on_solid}">{K.esc(c)}</text>')
         kf, vis = [], None
         for c2, t, _ in seq:
             v = 1 if c2 == c else 0

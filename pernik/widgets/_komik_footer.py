@@ -21,7 +21,7 @@ LABEL_FS = 18
 
 
 def render(opts, ctx):
-    k = K.Kit(ctx.theme)
+    k = K.Kit(ctx.theme, ctx.mode)
     text = ' '.join(str(opts.get('text') or '').split()) or 'thanks for stopping by!'
     name = ' '.join(str(opts.get('name') or '').split()) or (f'@{ctx.user}' if ctx.user else '')
     link = str(opts.get('link') or '').strip() or None
@@ -61,4 +61,4 @@ def render(opts, ctx):
 
     desc = f'A comic caption bar: {name + " says " if name else ""}"{text}"' + (', with a next button' if link else '') + '.'
     svg = k.doc(W, H, ''.join(body), title=text, desc=desc, css=k.css_arrive())
-    return Out(svg=svg, alt=text, href=link, same=True)
+    return Out(svg=svg, alt=text, href=link)

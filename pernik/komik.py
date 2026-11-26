@@ -1,7 +1,7 @@
 """Drawing kit for the "komik" style (two-colour risograph comic page). Rules: docs/design.md
 
     from pernik import komik as K
-    k = K.Kit(ctx.theme)                    # colours + fonts from the theme's [komik] table
+    k = K.Kit(ctx.theme, ctx.mode)          # colours + fonts from the theme's [komik] table
     body = k.card(0, 0, 900, 240)           # paper card with ink frame and paper margin
     body += k.panel(24, 24, 400, 192, fill=k.tint)
     body += k.label(24, 24, 160, 32, 'tech stack')
@@ -9,7 +9,7 @@
     svg = k.doc(900, 240, body, title='...', desc='...', css=k.css_arrive())
 
 All numbers are pixels on the 8-px grid. Line weights are only k.FRAME / k.LINE / k.HAIR.
-Light and dark use the same file: everything sits on opaque paper.
+Build the kit per mode, K.Kit(ctx.theme, ctx.mode): dark mode is a night print with its own colours.
 """
 import math
 import random
@@ -26,13 +26,20 @@ MONO_ADV = 0.6
 
 
 class Kit:
-    def __init__(self, theme):
+    def __init__(self, theme, mode='light'):
+        """Colours for one of GitHub's themes. [komik] holds the light values; [komik.dark]
+        overrides them for dark mode (a night print: dark paper, light lines)."""
         raw = theme.raw
-        c = raw.get('komik', {})
+        base = {k: v for k, v in raw.get('komik', {}).items() if not isinstance(v, dict)}
+        c = dict(base, **raw.get('komik', {}).get(mode, {})) if mode != 'light' else base
+        self.mode = mode
         self.paper = c.get('paper', '#FAF3F8')
         self.ink = c.get('ink', '#1C1520')
         self.spot = c.get('spot', '#E0569B')
         self.tint = c.get('tint', '#F4BCD8')
+        self.shade = c.get('shade', self.ink)     # the print shadow behind display type
+        self.solid = c.get('solid', self.ink)     # solid blocks: label bars, filled badges, tabs
+        self.on_solid = c.get('on_solid', self.paper)
         f = raw.get('font', {})
         self.f_display = f.get('display', "'Arial Rounded MT Bold', 'Nunito', sans-serif")
         self.f_label = f.get('label', "'Arial Black', Arial, sans-serif")
@@ -87,7 +94,7 @@ class Kit:
     def label(self, x, y, w, h, text, align='middle', size=None, inverse=False, upper=True):
         """A solid ink bar with paper text (like a panel title). inverse=True: paper bar, ink text.
         upper=False keeps the text's case (chord names like 'Em')."""
-        bg, fg = (self.paper, self.ink) if inverse else (self.ink, self.paper)
+        bg, fg = (self.paper, self.ink) if inverse else (self.solid, self.on_solid)
         size = size or min(h * 0.56, fit_label(text, w - 24, h * 0.56))
         tx = {'start': x + 12, 'middle': x + w / 2, 'end': x + w - 12}[align]
         keep = '' if upper else ' style="text-transform:none"'
@@ -103,7 +110,7 @@ class Kit:
         t = esc(text)
         sw = max(LINE, size * 0.06)
         base = f'x="{x:g}" y="{y:g}" font-size="{size:g}" text-anchor="{anchor}" class="kd"'
-        return (f'<text {base} transform="translate({shadow} {shadow})" fill="{self.ink}" stroke="{self.ink}" '
+        return (f'<text {base} transform="translate({shadow} {shadow})" fill="{self.shade}" stroke="{self.shade}" '
                 f'stroke-width="{sw:g}" stroke-linejoin="round">{t}</text>'
                 f'<text {base} fill="{fill}" stroke="{self.ink}" stroke-width="{sw:g}" stroke-linejoin="round" '
                 f'paint-order="stroke">{t}</text>')
@@ -133,7 +140,7 @@ class Kit:
     # ------------------------------------------------------------------ UI bits
     def badge(self, cx, cy, n, r=14, filled=False):
         """A numbered circle (order that means something)."""
-        bg, fg = (self.ink, self.paper) if filled else (self.paper, self.ink)
+        bg, fg = (self.solid, self.on_solid) if filled else (self.paper, self.ink)
         return (f'<circle cx="{cx:g}" cy="{cy:g}" r="{r:g}" fill="{bg}" stroke="{self.ink}" stroke-width="{LINE}"/>'
                 f'<text x="{cx:g}" y="{cy + r * 0.38:g}" font-size="{r * 1.1:g}" text-anchor="middle" class="kl" '
                 f'fill="{fg}">{esc(n)}</text>')
@@ -156,9 +163,9 @@ class Kit:
         inner = w - lw - 8
         return (f'<rect x="{x:g}" y="{y:g}" width="{w:g}" height="{h:g}" rx="{h / 2:g}" fill="{self.paper}" '
                 f'stroke="{self.ink}" stroke-width="{LINE}"/>'
-                f'<rect x="{x:g}" y="{y:g}" width="{lw:g}" height="{h:g}" rx="{h / 2:g}" fill="{self.ink}"/>'
+                f'<rect x="{x:g}" y="{y:g}" width="{lw:g}" height="{h:g}" rx="{h / 2:g}" fill="{self.solid}"/>'
                 f'<text x="{x + lw / 2:g}" y="{y + h / 2 + size * 0.36:g}" font-size="{size:g}" text-anchor="middle" '
-                f'class="km" fill="{self.paper}">{esc(label)}</text>'
+                f'class="km" fill="{self.on_solid}">{esc(label)}</text>'
                 f'<rect x="{x + lw + 4:g}" y="{y + 4:g}" width="{max(0, inner * frac):g}" height="{h - 8:g}" '
                 f'rx="{(h - 8) / 2:g}" fill="url(#ht3)"/>')
 

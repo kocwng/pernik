@@ -6,10 +6,12 @@
       "id": "hello",
       "kind": "hero",
       "files": {
-        "both": "pernik/hello.svg"
+        "light": "pernik/hello-light.svg",
+        "dark": "pernik/hello-dark.svg"
       },
       "bytes": {
-        "both": 14390
+        "light": 14390,
+        "dark": 14390
       },
       "alt": "hello there! (a banana strums a ukulele)",
       "href": null,
@@ -20,10 +22,12 @@
       "id": "line-kawung",
       "kind": "divider",
       "files": {
-        "both": "pernik/line-kawung.svg"
+        "light": "pernik/line-kawung-light.svg",
+        "dark": "pernik/line-kawung-dark.svg"
       },
       "bytes": {
-        "both": 7640
+        "light": 7640,
+        "dark": 7640
       },
       "alt": "Kawung batik divider",
       "href": null,
@@ -34,10 +38,12 @@
       "id": "about-title",
       "kind": "heading",
       "files": {
-        "both": "pernik/about-title.svg"
+        "light": "pernik/about-title-light.svg",
+        "dark": "pernik/about-title-dark.svg"
       },
       "bytes": {
-        "both": 2730
+        "light": 2730,
+        "dark": 2730
       },
       "alt": "chapter 1: about me",
       "href": null,
@@ -48,10 +54,12 @@
       "id": "stack-title",
       "kind": "heading",
       "files": {
-        "both": "pernik/stack-title.svg"
+        "light": "pernik/stack-title-light.svg",
+        "dark": "pernik/stack-title-dark.svg"
       },
       "bytes": {
-        "both": 2855
+        "light": 2855,
+        "dark": 2855
       },
       "alt": "chapter 2: tech stack",
       "href": null,
@@ -62,10 +70,12 @@
       "id": "stack",
       "kind": "stack",
       "files": {
-        "both": "pernik/stack.svg"
+        "light": "pernik/stack-light.svg",
+        "dark": "pernik/stack-dark.svg"
       },
       "bytes": {
-        "both": 14543
+        "light": 14543,
+        "dark": 14543
       },
       "alt": "Tech stack: Python, Go, Docker, PostgreSQL, Git, Figma",
       "href": null,
@@ -76,10 +86,12 @@
       "id": "tape",
       "kind": "mixtape",
       "files": {
-        "both": "pernik/tape.svg"
+        "light": "pernik/tape-light.svg",
+        "dark": "pernik/tape-dark.svg"
       },
       "bytes": {
-        "both": 7886
+        "light": 7886,
+        "dark": 7886
       },
       "alt": "Give it a listen! Play the recording.",
       "href": "https://octocat.github.io/octocat/tape/",
@@ -94,10 +106,12 @@
       "id": "line-mega",
       "kind": "divider",
       "files": {
-        "both": "pernik/line-mega.svg"
+        "light": "pernik/line-mega-light.svg",
+        "dark": "pernik/line-mega-dark.svg"
       },
       "bytes": {
-        "both": 5480
+        "light": 5480,
+        "dark": 5480
       },
       "alt": "Mega mendung batik divider",
       "href": null,
@@ -108,10 +122,12 @@
       "id": "bye",
       "kind": "footer",
       "files": {
-        "both": "pernik/bye.svg"
+        "light": "pernik/bye-light.svg",
+        "dark": "pernik/bye-dark.svg"
       },
       "bytes": {
-        "both": 3286
+        "light": 3286,
+        "dark": 3286
       },
       "alt": "thanks for stopping by!",
       "href": null,

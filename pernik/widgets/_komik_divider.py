@@ -101,13 +101,13 @@ def render(opts, ctx):
         h -= h % 8                                              # heights sit on the 8 grid
     anim = opts.get('animate', True)
     anim = anim if isinstance(anim, bool) else str(anim).lower() not in ('false', 'no', '0', 'off')
-    p = Print(K.Kit(ctx.theme), h, rng, anim)
+    p = Print(K.Kit(ctx.theme, ctx.mode), h, rng, anim)
     body = {'wave': _wave, 'dots': _dots, 'hearts': _hearts, 'film': _film, 'kawung': _kawung,
             'truntum': _truntum, 'mega-mendung': _mega, 'sekar-jagad': _sekar}[style](p)
     title = f'{NAMES[style]} divider'
     svg = p.k.doc(W, h, body, title=title, desc=f'A decorative {NAMES[style]} section divider, printed in two colours.',
                   css=p.css())
-    return Out(svg=svg, alt=title[0].upper() + title[1:], same=True)
+    return Out(svg=svg, alt=title[0].upper() + title[1:])
 
 
 # ---------------------------------------------------------------- komik-native
@@ -192,7 +192,7 @@ def _film(p):
         f = (f'<rect x="{n(x)}" y="{fy0}" width="{fw}" height="{fh}" rx="{K.R_LABEL}" fill="{k.paper}"/>'
              f'<rect x="{n(x)}" y="{fy0}" width="{fw}" height="{fh}" rx="{K.R_LABEL}" fill="{tone}"/>')
         frames.append(f'<g{p.cls("st", x)}>{f}</g>' if p.anim else f)
-    motif = (f'<rect x="0" y="{ink_y0}" width="{W}" height="{ink_y1 - ink_y0}" fill="{k.ink}"/>'
+    motif = (f'<rect x="0" y="{ink_y0}" width="{W}" height="{ink_y1 - ink_y0}" fill="{k.solid}"/>'
              f'<path d="{holes}" fill="{k.paper}"/>' + ''.join(frames))
     return p.frame(motif, '', inner_rule=False)
 

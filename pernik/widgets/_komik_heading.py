@@ -66,7 +66,7 @@ def flag(v, default=True):
 
 
 def render(opts, ctx):
-    k = K.Kit(ctx.theme)
+    k = K.Kit(ctx.theme, ctx.mode)
     say = ctx.log if ctx.mode == 'light' else (lambda *a: None)
     text = str(opts.get('text') or '').strip() or 'hello'
     note = str(opts.get('note') or '').strip()
@@ -129,7 +129,7 @@ def render(opts, ctx):
                      f'<text x="{n(bcx)}" y="{n(cy + 5)}" font-size="{14 if num < 10 else 12}" '
                      f'text-anchor="middle" class="kl" fill="{k.ink}">{num}</text>')
         tx = content_x + lead
-    parts.append(label_text(tx, cy + size * .36, shown, size, k.paper))
+    parts.append(label_text(tx, cy + size * .36, shown, size, k.on_solid))
     title = ''.join(parts)
 
     # rule(s) and caption, kept 16 px clear of the block and the frame
@@ -160,7 +160,7 @@ def render(opts, ctx):
     clip = (f'<defs><clipPath id="hc"><rect x="6" y="6" width="888" height="{H - 12}" rx="{K.R_PANEL}"/>'
             '</clipPath></defs>')
     body = (k.card(0, 0, W, H) + clip
-            + f'<g clip-path="url(#hc)"><path d="{sliver}" fill="{k.spot}"/><path d="{block}" fill="{k.ink}"/></g>'
+            + f'<g clip-path="url(#hc)"><path d="{sliver}" fill="{k.spot}"/><path d="{block}" fill="{k.solid}"/></g>'
             + f'<g class="arrive">{title}</g>'
             + f'<g fill="none" stroke="{k.ink}" stroke-width="{K.HAIR}" stroke-linecap="round">{rule_svg}</g>'
             + cap
@@ -173,4 +173,4 @@ def render(opts, ctx):
     chapter = f'chapter {num}: ' if num is not None else ''
     desc = f'Section heading: {chapter}{text}' + (f' ({note})' if note else '') + '.'
     svg = k.doc(W, H, body, title=f'{chapter}{text}', desc=desc, css=css)
-    return Out(svg=svg, alt=f'{chapter}{text}', same=True)
+    return Out(svg=svg, alt=f'{chapter}{text}')

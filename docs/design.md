@@ -15,6 +15,8 @@ Each theme has exactly four values:
 | `spot` | the single accent: fills, halftones, highlights | `#E0569B` |
 | `tint` | spot at about 35%, for large quiet areas | `#F4BCD8` |
 
+These are the day values. Dark mode has its own set (section 5).
+
 - No gradients. Tone comes from **halftone dots**, the way a two-colour press makes it.
 - No third hue. Changing the theme swaps the spot colour and everything follows.
 - White is not used; paper is the lightest value.
@@ -50,9 +52,28 @@ Lines are ink, round-capped and round-joined. Corners of panels: radius 6. Label
 - One display word per widget at most. Hierarchy comes from size and weight contrast (at least 2.5×), not from more fonts.
 - Display text gets the **print shadow**: an ink copy offset 4,4 behind a spot fill with an ink outline.
 
-## 5. Light and dark
+## 5. Light and dark: two printings
 
-Every widget is printed on its own piece of `paper` with an ink frame, plus a 4 px paper margin outside the frame. On GitHub light the margin disappears into the white page. On GitHub dark it reads as the edge of a printed card. Light and dark files are therefore identical (`same=True`): one file, half the bytes.
+A bright paper card on GitHub's dark page glares. So every widget is printed twice.
+
+- **Day print** (GitHub light): ink on paper, as above.
+- **Night print** (GitHub dark): the paper becomes `#161B22`, the raised-surface colour of GitHub dark, so cards sit quietly in the page. Lines and type become a soft light grey (`#A9B2BD`, not white). The tint becomes a deep version of the spot colour.
+
+Two extra tokens keep large solid areas calm at night:
+
+| Token | Role | Day | Night |
+|---|---|---|---|
+| `solid` | label bars, filled badges, tabs | = `ink` | deep spot, e.g. `#6B2C55` |
+| `on_solid` | text on `solid` | = `paper` | `#F2E9EF` |
+| `shade` | the print shadow behind display type | = `ink` | `#010409` |
+
+Rules for the night print:
+
+- No large light areas. Anything bigger than a line or a word uses `paper`, `tint` or `solid`.
+- The spot colour stays bright, because it is the one accent and carries the identity.
+- Halftones stay spot-coloured dots, which read as texture on dark paper.
+
+Every widget still has a 4 px paper margin outside its ink frame, so the card edge stays defined on both pages. The player page follows the visitor's light or dark setting the same way. A video can't adapt, so the video strip always uses the day print.
 
 ## 6. Ornament with a reason
 

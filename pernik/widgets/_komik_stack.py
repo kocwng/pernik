@@ -34,7 +34,7 @@ def _columns(n_items, want):
 
 
 def render(opts, ctx):
-    k = K.Kit(ctx.theme)
+    k = K.Kit(ctx.theme, ctx.mode)
     say = ctx.log if ctx.mode == 'light' else (lambda *a: None)
     icons = opts.get('icons') or []
     if isinstance(icons, str):
@@ -89,7 +89,7 @@ def render(opts, ctx):
     svg = k.doc(W, h, body, title=title, desc=desc, css=k.css_arrive(delay_step=.07, count=max(1, count)))
     if len(svg.encode()) > 25 * 1024:
         say(f'{len(svg.encode()) // 1024} KB, over the 25 KB budget; try fewer icons')
-    return Out(svg=svg, alt=title, same=True)
+    return Out(svg=svg, alt=title)
 
 
 def _panel(k, rng, i, x, y, w, title, d, numbered):
@@ -99,9 +99,9 @@ def _panel(k, rng, i, x, y, w, title, d, numbered):
     # title bar flush with the panel top (its top corners follow the panel's radius)
     r = K.R_PANEL
     out.append(f'<path d="M{x} {y + BAR}V{y + r}Q{x} {y} {x + r} {y}H{x + w - r}Q{x + w} {y} {x + w} {y + r}'
-               f'V{y + BAR}Z" fill="{k.ink}"/>')
+               f'V{y + BAR}Z" fill="{k.solid}"/>')
     shown, size = fit_label(title, w - 32, TITLE, 10)
-    out.append(label_text(cx, y + BAR / 2 + size * .36, shown, size, k.paper, 'middle'))
+    out.append(label_text(cx, y + BAR / 2 + size * .36, shown, size, k.on_solid, 'middle'))
     # the burst: seeded number of points, turn and size, so a row doesn't look stamped
     out.append(f'<use href="#kb{(i * 2 + rng.randrange(2)) % BURSTS}" '
                f'transform="translate({n(cx)} {n(cy)}) rotate({rng.randrange(0, 30)})"/>')
