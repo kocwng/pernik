@@ -147,10 +147,16 @@ def put_file(path, text):
 
 
 def _logo_files(widgets):
-    """The uploaded files the stack widgets' `logos` tables point at."""
-    out = []
+    """The uploaded files that `logos` tables point at: a widget's own (stack) or one in each of
+    its groups ([[widget.tree]], [[widget.line]])."""
+    tables = []
     for w in widgets:
-        logos = w.get('logos') if w.get('kind') == 'stack' else None
+        tables.append(w.get('logos'))
+        for v in w.values():
+            if isinstance(v, list):
+                tables += [g.get('logos') for g in v if isinstance(g, dict)]
+    out = []
+    for logos in tables:
         for spec in (logos.values() if isinstance(logos, dict) else ()):
             rel = spec.get('file') if isinstance(spec, dict) else spec
             if isinstance(rel, str) and rel in _state['files'] and rel not in out:

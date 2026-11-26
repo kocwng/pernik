@@ -69,11 +69,35 @@ Run `python3 -m pernik list` for every option.
 | `hero` | Your greeting in big colourful letters, with a banana playing ukulele | `greeting`, `mascot` (`"banana"` or `"none"`), `chords` (a chords.json to strum along to) |
 | `divider` | A section divider: a wavy ribbon or a batik band that draws itself in | `style` (`wave`, `kawung`, `truntum`, `mega-mendung`, `sekar-jagad`, `dots`), `colors`, `height` |
 | `heading` | A section title on a coloured sticker pill | `text`, `color`, `align` |
-| `stack` | Your tools, each with its logo: comic panels in komik, tilted stickers in stiker | `icons` (names like `"go"`, `"kafka"`, `"Node.js"`), `logos` (your own SVG files), `columns`, `numbered` |
+| `stack` | Your tools, each with its logo: comic panels in komik, tilted stickers in stiker | `icons` (names like `"go"`, `"kafka"`, `"Node.js"`), `logos` (your own SVG files), `density` (`"panels"` or `"compact"`), `columns` |
+| `garden` | **Kebun**: your tech stack as a garden. One tree per group, your tools hang as fruit, and the banana picks them into a basket | `[[widget.tree]]` blocks with `name`, `tree` (`mangga`, `kelapa`, `rambutan`, `pisang`), `icons`, `logos`; `harvest`, `mascot` |
+| `transit` | **Peta**: your tech stack as a transit map. One line per group, every tool a station, all lines meeting at you | `[[widget.line]]` blocks with `name`, `icons`, `logos`; `title`, `hub`, `train` |
 | `footer` | A rainbow ribbon with a thank-you message | `text` |
 | `mixtape` | A cassette for your own song, linking to a player page with a live chord card. It can also make a video that plays right on your profile | `song`, `label`, `caption`, `chords`, `make_video`, `video` |
 
 The batik dividers are procedural designs *inspired by* traditional motifs. [docs/motifs.md](docs/motifs.md) explains where each motif comes from.
+
+## Your tech stack as a picture
+
+Big lists look best as a scene. Choose one of these two:
+
+```toml
+[[widget]]
+id = "kebun"
+kind = "garden"           # or "transit" (then use [[widget.line]] instead of [[widget.tree]])
+
+[[widget.tree]]
+name = "languages & frameworks"
+tree = "mangga"
+icons = ["go", "python", "rust", "fastapi", "react"]
+
+[[widget.tree]]
+name = "data"
+tree = "kelapa"
+icons = ["postgresql", "redis", "kafka"]
+```
+
+To add a tool later, add its name to the right `icons` list and commit. The Action redraws the scene: a new fruit on the tree, or a new station on the line.
 
 ## Logos in the tech stack
 

@@ -144,6 +144,10 @@ class WidgetTests(unittest.TestCase):
                 lines += ['[[widget]]', f'id = "w-{kind}"', f'kind = "{kind}"']
                 if kind == 'stack':
                     lines.append('icons = []')
+                if kind == 'transit':
+                    lines.append('line = []')            # no network: an empty map
+                if kind == 'garden':
+                    lines.append('tree = []')            # no network: an empty garden
             p = write(d, 'pernik.toml', '\n'.join(lines) + '\n')
             cfg, manifest, problems = build(p, quiet=True)
             self.assertEqual(problems, [])

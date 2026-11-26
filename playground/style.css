@@ -341,6 +341,15 @@ a.btn { text-decoration: none; }
 .song-now .name { font: 700 14px/1.4 var(--mono); overflow-wrap: anywhere; }
 .song-now .tag { font: 12px/1.4 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
 
+/* groups: garden trees, transit lines */
+.field.groups legend { float: none; margin-bottom: 8px; }
+.group { margin: 0 0 12px; padding: 8px 12px 4px; border: var(--line) solid var(--ink); border-radius: 6px; min-width: 0; }
+.group-head { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; }
+.group-btns { margin-left: auto; display: flex; gap: 4px; }
+.group .field { margin-bottom: 12px; }
+.group .logos { margin-bottom: 8px; }
+.add-grid .btn.wide { grid-column: span 2; }
+
 /* mixtape video choice */
 .field.video legend { float: none; margin-bottom: 8px; }
 .choices { display: grid; gap: 4px; }

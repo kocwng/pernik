@@ -5,13 +5,29 @@
 (() => {
   // ------------------------------------------------------------------ tables
   const KIND_ORDER = ['hero', 'divider', 'heading', 'stack', 'mixtape', 'footer'];
-  const BASE_ID = { hero: 'hello', divider: 'line', heading: 'title', stack: 'stack', mixtape: 'tape', footer: 'bye' };
+  const BASE_ID = { hero: 'hello', divider: 'line', heading: 'title', stack: 'stack', mixtape: 'tape', footer: 'bye', garden: 'kebun', transit: 'peta' };
+  // widgets whose option is a list of tables ([[widget.tree]] / [[widget.line]]), each a group of icons
+  const TREES = ['mangga', 'kelapa', 'rambutan', 'pisang'];
+  const GROUP_MAX = 6;
+  const GROUPS = {
+    garden: { key: 'tree', one: 'tree', many: 'trees', choices: { tree: TREES }, start: [
+      { name: 'languages & frameworks', tree: 'mangga', icons: ['go', 'python', 'javascript'] },
+      { name: 'tools', tree: 'kelapa', icons: ['git', 'docker', 'linux'] }] },
+    transit: { key: 'line', one: 'line', many: 'lines', choices: {}, start: [
+      { name: 'languages & frameworks', icons: ['go', 'python', 'javascript'] },
+      { name: 'tools', icons: ['git', 'docker', 'linux'] }] },
+  };
+  const ADD_LABEL = {
+    garden: ['+ kebun (tech stack garden)', 'Add kebun: your tech stack drawn as a garden, one tree per group'],
+    transit: ['+ peta (tech stack map)', 'Add peta: your tech stack drawn as a transit map, one line per group'],
+  };
   const CHOICES = {
     'divider.style': ['wave', 'kawung', 'truntum', 'mega-mendung', 'sekar-jagad', 'dots', 'film', 'hearts'],
     'hero.mascot': ['banana', 'none'],
     'heading.align': ['left', 'center', 'right'],
     'stack.density': ['panels', 'compact'],
     'heading.color': ['pink', 'jeruk', 'kuning', 'mint', 'langit', 'anggur', 'ink'],
+    'garden.mascot': ['banana', 'none'],
     'mixtape.chords': ['auto', 'keep', 'off'],
     'mixtape.pages': ['docs', '/'],
   };
@@ -62,6 +78,10 @@
     'mixtape.video': 'A https://github.com/user-attachments/… video you uploaded.',
     'mixtape.make_video': 'Also render an MP4 to upload by hand. Not needed with “Play on my profile”.',
     'mixtape.link': 'Where the cassette goes. Empty: the tape player page.',
+    'garden.harvest': 'The banana picks fruit from a tree.',
+    'transit.title': 'Printed on the map. Empty hides it.',
+    'transit.hub': 'The station in the middle. Empty: your username.',
+    'transit.train': 'A little train runs along the lines.',
   };
   const KOMIK_ONLY = 'Komik themes only';
   const WORKFLOW = `name: pernik
@@ -161,7 +181,24 @@ jobs:
     return Object.assign({}, (specs[kind] || {}).defaults || {}, EXTRAS[kind] || {});
   }
   function newWidget(kind, id, opts) {
-    return { uid: 'w' + (++uidN), kind, id: id || freeId(kind), opts: Object.assign(baseDefaults(kind), START[kind] || {}, opts || {}) };
+    const w = { uid: 'w' + (++uidN), kind, id: id || freeId(kind),
+      opts: structuredClone(Object.assign(baseDefaults(kind), START[kind] || {}, opts || {})) };
+    fixGroups(w);
+    return w;
+  }
+  /** Make sure a garden/transit widget has 1-6 well-formed groups. */
+  function fixGroups(w) {
+    const g = GROUPS[w.kind];
+    if (!g) return;
+    let list = Array.isArray(w.opts[g.key]) ? w.opts[g.key].filter(isTable) : [];
+    if (!list.length) list = structuredClone(g.start);
+    w.opts[g.key] = list.slice(0, GROUP_MAX).map((grp, i) => {
+      const out = { name: String(grp.name ?? ''), icons: (Array.isArray(grp.icons) ? grp.icons : String(grp.icons || '').split(','))
+        .map((x) => String(x).trim()).filter(Boolean) };
+      if (g.choices.tree) out.tree = TREES.includes(grp.tree) ? grp.tree : TREES[i % TREES.length];
+      if (isTable(grp.logos) && Object.keys(grp.logos).length) out.logos = grp.logos;
+      return out;
+    });
   }
   function freeId(kind, taken) {
     const used = new Set(taken || state.widgets.map((w) => w.id));
@@ -176,9 +213,18 @@ jobs:
     }
     const out = {};
     const spec = (specs[w.kind] || {}).defaults || {};
+    const g = GROUPS[w.kind];
     const extra = EXTRAS[w.kind] || {};
     for (const [k, v] of Object.entries(w.opts)) {
-      if (k in spec) {
+      if (g && k === g.key) {
+        out[k] = (v || []).map((grp) => {
+          const o = { name: grp.name };
+          if (grp.tree) o.tree = grp.tree;
+          o.icons = grp.icons || [];
+          if (isTable(grp.logos) && Object.keys(grp.logos).length) o.logos = grp.logos;
+          return o;
+        });
+      } else if (k in spec) {
         if (!same(v, spec[k]) && v !== null) out[k] = v;
       } else if (k in extra) {
         if (v === null || v === '' || (Array.isArray(v) && !v.length) || same(v, extra[k])) continue;
@@ -270,7 +316,7 @@ jobs:
 
   function keyOf(w) {
     const extra = w.kind === 'mixtape' ? [demoSecs, (songs.get(w.opts.song) || {}).secs || 0]
-      : w.kind === 'stack' ? Object.values(w.opts.logos || {}).map((sp) => (files.get(logoFile(sp)) || {}).rev || '') : 0;
+      : holders(w).length ? holders(w).flatMap((hd) => Object.values(hd.logos || {}).map((sp) => (files.get(logoFile(sp)) || {}).rev || '')) : 0;
     return JSON.stringify([state.theme, state.user, w.id, w.kind, clean(w), extra]);
   }
   function flush() {
@@ -416,7 +462,8 @@ jobs:
     box.replaceChildren();
     for (const kind of kinds()) {
       const doc = ((specs[kind] || {}).doc || '').split('\n')[0];
-      box.append(h('button', { class: 'btn', type: 'button', 'data-kind': kind, title: doc, 'aria-label': `Add ${kind}: ${doc}` }, `+ ${kind}`));
+      const [text, aria] = ADD_LABEL[kind] || [`+ ${kind}`, `Add ${kind}: ${doc}`];
+      box.append(h('button', { class: 'btn' + (ADD_LABEL[kind] ? ' wide' : ''), type: 'button', 'data-kind': kind, title: doc, 'aria-label': aria }, text));
     }
     box.append(h('button', { class: 'btn', type: 'button', 'data-kind': 'text', title: 'Your own words, in markdown, between the pictures',
       'aria-label': 'Add text: your own words, in markdown, between the pictures' }, '+ text'));
@@ -525,7 +572,10 @@ jobs:
 
     const adv = new Set(ADVANCED[w.kind] || []);
     const main = [], more = [];
-    for (const [k, d] of Object.entries(spec.defaults || {})) (adv.has(k) ? more : main).push(field(k, d));
+    for (const [k, d] of Object.entries(spec.defaults || {})) {
+      if (GROUPS[w.kind] && k === GROUPS[w.kind].key) continue;
+      (adv.has(k) ? more : main).push(field(k, d));
+    }
     const extras = Object.entries(EXTRAS[w.kind] || {}).map(([k, d]) => field(k, d));
     const doc = (spec.doc || '').split('\n')[0];
     return [
@@ -536,6 +586,7 @@ jobs:
         h('p', { class: 'hint', id: fid('_id') + '-h', text: 'Letters, digits, - and _. Used for file names and <!-- pernik:id -->.' })),
       main,
       w.kind === 'stack' ? logosSection(w) : null,
+      GROUPS[w.kind] ? groupsField(w) : null,
       w.kind === 'mixtape' ? songSection(w) : null,
       extras.length ? h('details', {}, h('summary', { text: `${KOMIK_ONLY}: more options` }), extras) : null,
       more.length ? h('details', {}, h('summary', { text: 'Advanced' }), more) : null,
@@ -621,7 +672,7 @@ jobs:
         links.append('Download: ', ...list.map(([suffix, url]) => h('a', { href: url, download: `${w.id}${suffix}.svg`, text: `${w.id}${suffix}.svg` })));
       }
     }
-    if (w.kind === 'stack') paintLogos(li, w);
+    if (w.kind === 'stack' || GROUPS[w.kind]) paintLogos(li, w);
     if (w.kind === 'mixtape') paintSong(li, w);
   }
   function paintCard(w) {
@@ -668,6 +719,7 @@ jobs:
 
   function onFieldInput(e) {
     const el = e.target;
+    if (el.dataset && el.dataset.groupKey) { onGroupInput(el); return; }
     const key = el.dataset && el.dataset.key;
     if (!key) return;
     const li = el.closest('[data-uid]');
@@ -748,11 +800,23 @@ jobs:
     if (text === null) files.delete(path); else files.set(path, { text, rev: fileRev(text) });
     worker.postMessage({ type: 'file', path, text });
   }
+  /** Everything that has its own icons + logos: the stack's options, or each garden/transit group. */
+  function holders(w) {
+    if (w.kind === 'stack') return [w.opts];
+    const g = GROUPS[w.kind];
+    return g && Array.isArray(w.opts[g.key]) ? w.opts[g.key] : [];
+  }
+  function holderOf(w, el) {
+    const card = el.closest('.group');
+    if (card && groupOf.has(card)) return groupOf.get(card);
+    const sec = el.closest('.logos[data-group]');
+    const gi = sec ? sec.dataset.group : '';
+    return gi === '' ? w.opts : holders(w)[Number(gi)];
+  }
   function referenced() {
     const set = new Set();
     for (const w of state.widgets) {
-      if (w.kind !== 'stack') continue;
-      for (const sp of Object.values(w.opts.logos || {})) if (logoFile(sp)) set.add(logoFile(sp));
+      for (const hd of holders(w)) for (const sp of Object.values(hd.logos || {})) if (logoFile(sp)) set.add(logoFile(sp));
     }
     return set;
   }
@@ -763,30 +827,33 @@ jobs:
   function safeName(name) {
     return String(name).toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^[^a-z0-9]+|[-._]+$/g, '').slice(0, 40) || 'logo';
   }
-  function pathFor(w, name) {
-    const cur = logoFile((w.opts.logos || {})[name]);
+  function pathFor(holder, name) {
+    const cur = logoFile((holder.logos || {})[name]);
     if (LOGO_PATH_RE.test(cur)) return cur;
     const taken = new Set();
     for (const x of state.widgets) {
-      for (const [n, sp] of Object.entries(x.opts.logos || {})) if (!(x === w && n === name)) taken.add(logoFile(sp));
+      for (const hd of holders(x)) {
+        for (const [n, sp] of Object.entries(hd.logos || {})) if (!(hd === holder && n === name)) taken.add(logoFile(sp));
+      }
     }
     const base = `assets/logos/${safeName(name)}`;
     let p = `${base}.svg`;
     for (let i = 2; taken.has(p); i++) p = `${base}-${i}.svg`;
     return p;
   }
-  function setLogo(w, name, spec) {
-    const logos = Object.assign({}, w.opts.logos || {});
+  function setLogo(holder, name, spec) {
+    const logos = Object.assign({}, holder.logos || {});
     if (spec === null) delete logos[name]; else logos[name] = spec;
-    w.opts.logos = logos;
+    if (Object.keys(logos).length) holder.logos = logos; else delete holder.logos;
   }
 
-  function logosSection(w) {
-    return h('fieldset', { class: 'logos', 'aria-describedby': `olh-${w.uid}` },
+  function logosSection(w, gi = '') {
+    const sfx = `${w.uid}${gi === '' ? '' : '-' + gi}`;
+    return h('fieldset', { class: 'logos', 'data-group': String(gi), 'aria-describedby': `olh-${sfx}` },
       h('legend', { class: 'label', text: 'Own logos' }),
-      h('p', { class: 'hint', id: `olh-${w.uid}`, text: 'For names Simple Icons doesn’t have, like aws. An SVG file with a viewBox, up to 200 KB; only its <path> shapes are used, in one colour.' }),
-      h('div', { class: 'logo-rows', id: `ol-${w.uid}` }),
-      h('p', { class: 'hint logo-msg', id: `olm-${w.uid}`, role: 'status' }));
+      h('p', { class: 'hint', id: `olh-${sfx}`, text: 'For names Simple Icons doesn’t have, like aws. An SVG file with a viewBox, up to 200 KB; only its <path> shapes are used, in one colour.' }),
+      h('div', { class: 'logo-rows', id: `ol-${sfx}` }),
+      h('p', { class: 'hint logo-msg', id: `olm-${sfx}`, role: 'status' }));
   }
   function logoReport(w) {
     const c = cache.get(w.uid);
@@ -802,12 +869,16 @@ jobs:
     return { fresh, missing, broken };
   }
   function paintLogos(li, w) {
-    const box = li.querySelector('.logo-rows');
-    if (!box) return;
-    const { fresh, missing, broken } = logoReport(w);
-    const logos = w.opts.logos || {};
+    const report = logoReport(w);
+    for (const sec of li.querySelectorAll('.logos[data-group]')) {
+      const hd = sec.dataset.group === '' ? w.opts : holders(w)[Number(sec.dataset.group)];
+      if (hd) paintLogoRows(sec.querySelector('.logo-rows'), w, hd, sec.dataset.group, report);
+    }
+  }
+  function paintLogoRows(box, w, holder, gi, { fresh, missing, broken }) {
+    const logos = holder.logos || {};
     const names = [];
-    for (const n of Array.isArray(w.opts.icons) ? w.opts.icons : []) if (!names.includes(n)) names.push(n);
+    for (const n of Array.isArray(holder.icons) ? holder.icons : []) if (!names.includes(n)) names.push(n);
     for (const n of Object.keys(logos)) if (!names.includes(n)) names.push(n);
     const rank = (n) => (logoFile(logos[n]) ? 1 : missing.has(n) ? 0 : 2);
     names.sort((a, b) => rank(a) - rank(b));           // names without any logo first
@@ -823,7 +894,7 @@ jobs:
     box.dataset.sig = sig;
     const act = document.activeElement;
     const restore = act && box.contains(act) ? [act.dataset.logoName, act.dataset.logoAct] : null;
-    box.replaceChildren(...rows.map((r, i) => logoRow(w, r, i)));
+    box.replaceChildren(...rows.map((r, i) => logoRow(w, r, `${gi}-${i}`)));
     if (!rows.length) box.append(h('p', { class: 'hint', text: 'Add names to icons first.' }));
     if (restore) {
       const pick = (a) => [...box.querySelectorAll('[data-logo-name]')].find((e) => e.dataset.logoName === restore[0] && e.dataset.logoAct === a);
@@ -857,7 +928,9 @@ jobs:
     const w = state.widgets.find((x) => x.uid === li.dataset.uid);
     const name = el.dataset.logoName;
     const f = el.files && el.files[0];
-    const say = (t) => { li.querySelector('.logo-msg').textContent = t; };
+    const holder = w && holderOf(w, el);
+    const sec = el.closest('.logos');
+    const say = (t) => { sec.querySelector('.logo-msg').textContent = t; };
     if (!w || !f) return;
     if (!(/\.svg$/i.test(f.name) || f.type === 'image/svg+xml')) { say(`“${f.name}” isn’t an SVG file. Pick a .svg logo.`); el.value = ''; return; }
     if (f.size > LOGO_MAX) { say(`“${f.name}” is ${Math.ceil(f.size / 1024)} KB; a logo can be at most 200 KB. An optimiser like SVGO usually shrinks it.`); el.value = ''; return; }
@@ -866,10 +939,10 @@ jobs:
     el.value = '';
     if (!/<svg[\s>]/i.test(text)) { say(`“${f.name}” doesn’t look like an SVG (there is no <svg> tag).`); return; }
     if (!/\sviewBox=["'][^"']+["']/.test(text)) { say(`“${f.name}” has no viewBox. Add one to its <svg> tag, e.g. viewBox="0 0 24 24", and upload it again.`); return; }
-    const path = pathFor(w, name);
+    const path = pathFor(holder, name);
     putFile(path, text);
-    const color = logoColor((w.opts.logos || {})[name]);
-    setLogo(w, name, HEX_RE.test(color) ? { file: path, color } : path);
+    const color = logoColor((holder.logos || {})[name]);
+    setLogo(holder, name, HEX_RE.test(color) ? { file: path, color } : path);
     say(`Using “${f.name}” for ${name}, saved as ${path}. Commit it at that path in your repo.`);
     paintCard(w);
     schedule(30);
@@ -883,9 +956,10 @@ jobs:
     const li = b.closest('[data-uid]');
     const w = state.widgets.find((x) => x.uid === li.dataset.uid);
     const name = b.dataset.logoName;
-    setLogo(w, name, null);
+    const sec = b.closest('.logos');
+    setLogo(holderOf(w, b), name, null);
     gcFiles();
-    li.querySelector('.logo-msg').textContent = `Removed the ${name} logo.`;
+    sec.querySelector('.logo-msg').textContent = `Removed the ${name} logo.`;
     paintCard(w);
     schedule(30);
   });
@@ -899,11 +973,112 @@ jobs:
     const ok = v === '' || HEX_RE.test(v);
     el.setAttribute('aria-invalid', ok ? 'false' : 'true');
     if (!ok) return;
-    const file = logoFile((w.opts.logos || {})[name]);
-    setLogo(w, name, v ? { file, color: v } : file);
+    const holder = holderOf(w, el);
+    const file = logoFile((holder.logos || {})[name]);
+    setLogo(holder, name, v ? { file, color: v } : file);
     const chip = el.parentElement.querySelector('.chip');
     if (chip) chip.style.background = v || '';
     schedule(300);
+  });
+
+  // ------------------------------------------------------------------ groups (garden trees, transit lines)
+  function groupsField(w) {
+    const g = GROUPS[w.kind];
+    const list = holders(w);
+    return h('fieldset', { class: 'field groups' },
+      h('legend', { class: 'label', text: `${g.many} (1–${GROUP_MAX})` }),
+      list.map((grp, gi) => groupCard(w, g, grp, gi, list.length)),
+      h('button', { class: 'btn', type: 'button', 'data-group-act': 'add', disabled: list.length >= GROUP_MAX,
+        text: list.length >= GROUP_MAX ? `${GROUP_MAX} ${g.many} at most` : `+ add a ${g.one}` }));
+  }
+  function groupCard(w, g, grp, gi, n) {
+    const id = (k) => `g-${w.uid}-${gi}-${k}`;
+    const what = `${g.one} ${gi + 1}${grp.name ? ` “${grp.name}”` : ''}`;
+    const text = (key, label, value, hint, extra) => h('div', { class: 'field' },
+      h('label', { class: 'label', for: id(key), text: label }),
+      h('input', Object.assign({ id: id(key), type: 'text', value, spellcheck: 'false', autocomplete: 'off', 'data-group-key': key,
+        'aria-describedby': hint ? id(key) + '-h' : null }, extra || {})),
+      hint ? h('p', { class: 'hint', id: id(key) + '-h', text: hint }) : null);
+    const card = h('div', { class: 'group', 'data-gi': String(gi), role: 'group', 'aria-labelledby': id('t') },
+      h('div', { class: 'group-head' },
+        h('span', { class: 'wnum', 'aria-hidden': 'true', text: String(gi + 1) }),
+        h('span', { class: 'label', id: id('t'), text: `${g.one} ${gi + 1}` }),
+        h('span', { class: 'group-btns' },
+          h('button', { class: 'icon', type: 'button', 'data-group-act': 'up', disabled: gi === 0, 'aria-label': `Move ${what} up`, title: 'Move up', text: '↑' }),
+          h('button', { class: 'icon', type: 'button', 'data-group-act': 'down', disabled: gi === n - 1, 'aria-label': `Move ${what} down`, title: 'Move down', text: '↓' }),
+          h('button', { class: 'icon', type: 'button', 'data-group-act': 'remove', disabled: n <= 1, 'aria-label': `Remove ${what}`, title: n <= 1 ? 'Keep at least one' : 'Remove', text: '✕' }))),
+      text('name', 'name', grp.name || '', `Shown on the ${g.one === 'tree' ? 'wooden marker' : 'line'}, e.g. languages & frameworks.`),
+      ...Object.entries(g.choices).map(([key, choices]) => h('div', { class: 'field' },
+        h('label', { class: 'label', for: id(key), text: key }),
+        h('select', { id: id(key), 'data-group-key': key }, choices.map((c) => h('option', { value: c, selected: c === grp[key], text: c }))))),
+      text('icons', 'icons', (grp.icons || []).join(', '), 'Simple Icons names, comma separated: go, docker, kafka…'),
+      logosSection(w, gi));
+    groupOf.set(card, grp);   // edits go to this group object even if a late event arrives after a reorder
+    return card;
+  }
+  const groupOf = new WeakMap();
+  function onGroupInput(el) {
+    const li = el.closest('[data-uid]');
+    const w = li && state.widgets.find((x) => x.uid === li.dataset.uid);
+    const grp = groupOf.get(el.closest('.group'));
+    if (!w || !grp) return;
+    const key = el.dataset.groupKey;
+    if (key === 'icons') grp.icons = parseValue('list', el.value);
+    else grp[key] = el.value;
+    if (key === 'name') {                     // keep the move/remove buttons' names in step
+      const g = GROUPS[w.kind];
+      const gi = Number(el.closest('.group').dataset.gi);
+      const what = `${g.one} ${gi + 1}${grp.name ? ` “${grp.name}”` : ''}`;
+      for (const b of el.closest('.group').querySelectorAll('[data-group-act]')) {
+        const verb = { up: 'Move', down: 'Move', remove: 'Remove' }[b.dataset.groupAct];
+        b.setAttribute('aria-label', `${verb} ${what}${b.dataset.groupAct === 'up' ? ' up' : b.dataset.groupAct === 'down' ? ' down' : ''}`);
+      }
+    }
+    if (key === 'icons') paintCard(w);
+    schedule(el.tagName === 'SELECT' ? 30 : 300);
+  }
+  function rebuildBody(li, w, focus) {
+    const body = li.querySelector('.wbody');
+    body.replaceChildren(...form(w));
+    paintCardState(li, w);
+    if (focus) {
+      const el = body.querySelector(focus);
+      if (el && !el.disabled) el.focus();
+      else (body.querySelector(`.group[data-gi] [data-group-key="name"]`) || body).focus();
+    }
+  }
+  $('#widgets').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-group-act]');
+    if (!b) return;
+    const li = b.closest('[data-uid]');
+    // finish an edit in progress (its change event) before the groups move around
+    if (li.contains(document.activeElement) && document.activeElement !== b) document.activeElement.blur();
+    const w = state.widgets.find((x) => x.uid === li.dataset.uid);
+    const g = GROUPS[w.kind];
+    const list = holders(w);
+    const act = b.dataset.groupAct;
+    const gi = b.closest('.group') ? Number(b.closest('.group').dataset.gi) : -1;
+    let focus = null;
+    let say = '';
+    if (act === 'add' && list.length < GROUP_MAX) {
+      const n = list.length;
+      list.push(g.choices.tree ? { name: '', tree: TREES[n % TREES.length], icons: [] } : { name: '', icons: [] });
+      focus = `.group[data-gi="${n}"] [data-group-key="name"]`;
+      say = `Added ${g.one} ${n + 1}.`;
+    } else if ((act === 'up' && gi > 0) || (act === 'down' && gi < list.length - 1)) {
+      const j = act === 'up' ? gi - 1 : gi + 1;
+      [list[gi], list[j]] = [list[j], list[gi]];
+      focus = `.group[data-gi="${j}"] [data-group-act="${act}"]`;
+      say = `Moved ${g.one} ${gi + 1} to position ${j + 1}.`;
+    } else if (act === 'remove' && list.length > 1) {
+      list.splice(gi, 1);
+      gcFiles();
+      focus = `.group[data-gi="${Math.min(gi, list.length - 1)}"] [data-group-key="name"]`;
+      say = `Removed ${g.one} ${gi + 1}.`;
+    } else return;
+    rebuildBody(li, w, focus);
+    announceOut(say);
+    schedule(30);
   });
 
   // ------------------------------------------------------------------ text blocks (markdown)
@@ -1148,9 +1323,19 @@ jobs:
       if (w.kind === 'text') continue;            // your words live in README.md, not here
       out.push('');
       if (w.kind === 'mixtape' && !(profile && songs.has(w.opts.song))) out.push('# put your own song in the repo and point song at it (only songs you have the rights to)');
-      if (w.kind === 'stack' && Object.keys(w.opts.logos || {}).length) out.push('# commit your logo files at these paths (the playground’s zip has them)');
+      if (holders(w).some((hd) => Object.keys(hd.logos || {}).length)) out.push('# commit your logo files at these paths (the playground’s zip has them)');
       out.push('[[widget]]', `id = ${tomlValue(w.id)}`, `kind = ${tomlValue(w.kind)}`);
-      for (const [k, v] of Object.entries(clean(w))) out.push(`${k} = ${tomlValue(v)}`);
+      const tables = [];
+      for (const [k, v] of Object.entries(clean(w))) {
+        if (Array.isArray(v) && v.length && v.every(isTable)) tables.push([k, v]);   // [[widget.<k>]], written last
+        else out.push(`${k} = ${tomlValue(v)}`);
+      }
+      for (const [k, list] of tables) {
+        for (const item of list) {
+          out.push('', `[[widget.${k}]]`);
+          for (const [k2, v2] of Object.entries(item)) out.push(`${tomlKey(k2)} = ${tomlValue(v2)}`);
+        }
+      }
     }
     return out.join('\n') + '\n';
   }
@@ -1315,7 +1500,8 @@ jobs:
       const wid = ID_RE.test(String(id)) && !taken.includes(String(id)) ? String(id) : freeId(kind, taken);
       taken.push(wid);
       const w = newWidget(kind, wid);
-      w.opts = Object.assign(baseDefaults(kind), opts && typeof opts === 'object' ? opts : {});
+      w.opts = structuredClone(Object.assign(baseDefaults(kind), opts && typeof opts === 'object' ? opts : {}));
+      fixGroups(w);
       widgets.push(w);
     }
     return { user: USER_RE.test(d.u || '') ? d.u : 'octocat', theme: String(d.t || 'komik'), widgets };
