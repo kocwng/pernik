@@ -601,9 +601,17 @@ def make_video(t, ctx):
     stamp = hashlib.sha1(json.dumps([sha1(t['song_abs']), t['label'], t['side'], t['length'], colors,
                                      seconds, vid.W, vid.H, 1] + ([style] if style != 'sticker' else [])).encode()).hexdigest()[:16]
     _STAMPS[(ctx.root, ctx.widget_id)] = stamp
-    if t['video_auto'] and read_media(media_path(ctx)).get(ctx.widget_id, {}).get('stamp') == stamp:
-        ctx.log('video: the uploaded video is up to date')
-        return
+    if t['video_auto']:
+        media = read_media(media_path(ctx))
+        entry = media.get(ctx.widget_id) or {}
+        if entry.get('stamp') == stamp:
+            key = _key(t['song_abs'], t['label'], t['side'], ctx.theme.name)
+            if entry.get('source') != key:          # same video, fingerprint not saved yet
+                entry['source'] = key
+                ctx.write(os.path.relpath(media_path(ctx), ctx.root),
+                          json.dumps(media, indent=2, sort_keys=True) + '\n')
+            ctx.log('video: the uploaded video is up to date')
+            return
     if vid.stamp_of(path) == stamp:
         ctx.log(f'video: {rel} is up to date')
     else:
