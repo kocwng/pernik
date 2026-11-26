@@ -94,6 +94,10 @@ jobs:
   const WORDS = 'Write a few lines about yourself here. Pernik only changes what sits between its markers.';
   const USER_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
   const ID_RE = /^[A-Za-z0-9_-]+$/;
+  const LOGO_MAX = 200 * 1024;                  // bytes per uploaded logo
+  const HASH_MAX = 16 * 1024;                   // share links keep uploaded logos only below this
+  const LOGO_PATH_RE = /^assets\/logos\/[a-z0-9][a-z0-9._-]{0,60}\.svg$/;
+  const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
   // ------------------------------------------------------------------ state
   let gallery = { themes: [], widgets: {}, prerender: {} };
@@ -107,6 +111,7 @@ jobs:
   let demoSecs = 0;
   let demoAsked = false;
   let lastMs = null;
+  const files = new Map();      // uploaded logos: repo path -> {text, rev}
 
   const $ = (s, el = document) => el.querySelector(s);
   const store = {
@@ -153,12 +158,13 @@ jobs:
       } else if (k in extra) {
         if (v === null || v === '' || (Array.isArray(v) && !v.length) || same(v, extra[k])) continue;
         out[k] = v;
-      } else if (v !== null && v !== '') {
+      } else if (v !== null && v !== '' && !(isTable(v) && !Object.keys(v).length)) {
         out[k] = v;
       }
     }
     return out;
   }
+  const isTable = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
   function fieldType(kind, key, def) {
     if (CHOICES[`${kind}.${key}`]) return 'select';
     if (typeof def === 'boolean') return 'bool';
@@ -237,7 +243,9 @@ jobs:
   }
 
   function keyOf(w) {
-    return JSON.stringify([state.theme, state.user, w.id, w.kind, clean(w), w.kind === 'mixtape' ? demoSecs : 0]);
+    const extra = w.kind === 'mixtape' ? demoSecs
+      : w.kind === 'stack' ? Object.values(w.opts.logos || {}).map((sp) => (files.get(logoFile(sp)) || {}).rev || '') : 0;
+    return JSON.stringify([state.theme, state.user, w.id, w.kind, clean(w), extra]);
   }
   function flush() {
     measureDemo();
@@ -468,6 +476,7 @@ jobs:
         h('input', { id: fid('_id'), type: 'text', 'data-key': '_id', value: w.id, spellcheck: 'false', autocomplete: 'off', 'aria-describedby': fid('_id') + '-h' }),
         h('p', { class: 'hint', id: fid('_id') + '-h', text: 'Letters, digits, - and _. Used for file names and <!-- pernik:id -->.' })),
       main,
+      w.kind === 'stack' ? logosSection(w) : null,
       extras.length ? h('details', {}, h('summary', { text: `${KOMIK_ONLY}: more options` }), extras) : null,
       more.length ? h('details', {}, h('summary', { text: 'Advanced' }), more) : null,
       h('ul', { class: 'wlogs', id: 'wl-' + w.uid, hidden: true, 'aria-label': `Notes from ${w.id}` }),
@@ -487,14 +496,15 @@ jobs:
       logs.replaceChildren(...lines.map((t) => h('li', { text: t })));
       logs.hidden = !lines.length;
     }
-    const files = li.querySelector('.wfiles');
-    if (files) {
-      files.replaceChildren();
+    const links = li.querySelector('.wfiles');
+    if (links) {
+      links.replaceChildren();
       if (c && !c.result.error) {
         const list = c.result.same ? [['', c.urls.light]] : [['-light', c.urls.light], ['-dark', c.urls.dark]];
-        files.append('Download: ', ...list.map(([suffix, url]) => h('a', { href: url, download: `${w.id}${suffix}.svg`, text: `${w.id}${suffix}.svg` })));
+        links.append('Download: ', ...list.map(([suffix, url]) => h('a', { href: url, download: `${w.id}${suffix}.svg`, text: `${w.id}${suffix}.svg` })));
       }
     }
+    if (w.kind === 'stack') paintLogos(li, w);
   }
   function paintCard(w) {
     const li = document.querySelector(`.wcard[data-uid="${w.uid}"]`);
@@ -531,6 +541,7 @@ jobs:
       if (c) revoke(c);
       cache.delete(w.uid);
       pending.delete(w.uid);
+      gcFiles();
       const next = state.widgets[Math.min(i, state.widgets.length - 1)];
       structural(next ? { uid: next.uid, focus: 'toggle' } : { fallback: () => $('#add .btn') });
       announceOut(`Removed ${w.kind} “${w.id}”.`);
@@ -562,6 +573,7 @@ jobs:
       const def = baseDefaults(w.kind)[key];
       const raw = type === 'bool' ? el.checked : el.value;
       w.opts[key] = parseValue(type, raw, def, el.dataset.numericList === '1');
+      if (w.kind === 'stack' && key === 'icons') paintCard(w);
     }
     const instant = el.tagName === 'SELECT' || el.type === 'checkbox';
     schedule(instant ? 30 : 300);
@@ -586,9 +598,181 @@ jobs:
     schedule(30);
   }
 
+  // ------------------------------------------------------------------ own logos (stack)
+  const logoFile = (sp) => (typeof sp === 'string' ? sp : (isTable(sp) && typeof sp.file === 'string' ? sp.file : ''));
+  const logoColor = (sp) => (isTable(sp) && typeof sp.color === 'string' ? sp.color : '');
+  function fileRev(text) {
+    let x = 2166136261;
+    for (let i = 0; i < text.length; i++) { x ^= text.charCodeAt(i); x = Math.imul(x, 16777619); }
+    return (x >>> 0).toString(36) + '.' + text.length.toString(36);
+  }
+  function putFile(path, text) {
+    if (text === null) files.delete(path); else files.set(path, { text, rev: fileRev(text) });
+    worker.postMessage({ type: 'file', path, text });
+  }
+  function referenced() {
+    const set = new Set();
+    for (const w of state.widgets) {
+      if (w.kind !== 'stack') continue;
+      for (const sp of Object.values(w.opts.logos || {})) if (logoFile(sp)) set.add(logoFile(sp));
+    }
+    return set;
+  }
+  function gcFiles() {
+    const used = referenced();
+    for (const p of [...files.keys()]) if (!used.has(p)) putFile(p, null);
+  }
+  function safeName(name) {
+    return String(name).toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^[^a-z0-9]+|[-._]+$/g, '').slice(0, 40) || 'logo';
+  }
+  function pathFor(w, name) {
+    const cur = logoFile((w.opts.logos || {})[name]);
+    if (LOGO_PATH_RE.test(cur)) return cur;
+    const taken = new Set();
+    for (const x of state.widgets) {
+      for (const [n, sp] of Object.entries(x.opts.logos || {})) if (!(x === w && n === name)) taken.add(logoFile(sp));
+    }
+    const base = `assets/logos/${safeName(name)}`;
+    let p = `${base}.svg`;
+    for (let i = 2; taken.has(p); i++) p = `${base}-${i}.svg`;
+    return p;
+  }
+  function setLogo(w, name, spec) {
+    const logos = Object.assign({}, w.opts.logos || {});
+    if (spec === null) delete logos[name]; else logos[name] = spec;
+    w.opts.logos = logos;
+  }
+
+  function logosSection(w) {
+    return h('fieldset', { class: 'logos', 'aria-describedby': `olh-${w.uid}` },
+      h('legend', { class: 'label', text: 'Own logos' }),
+      h('p', { class: 'hint', id: `olh-${w.uid}`, text: 'For names Simple Icons doesn’t have, like aws. An SVG file with a viewBox, up to 200 KB; only its <path> shapes are used, in one colour.' }),
+      h('div', { class: 'logo-rows', id: `ol-${w.uid}` }),
+      h('p', { class: 'hint logo-msg', id: `olm-${w.uid}`, role: 'status' }));
+  }
+  function logoReport(w) {
+    const c = cache.get(w.uid);
+    const fresh = !!(c && c.key === keyOf(w) && !c.result.error);
+    const missing = new Set();
+    const broken = new Map();
+    for (const line of (c && c.result.logs) || []) {
+      let m = line.match(/^"(.+?)" (?:is not in Simple Icons|has no logo file)/);
+      if (m) missing.add(m[1]);
+      m = line.match(/logo file "([^"]+)"/);
+      if (m) broken.set(m[1], line);
+    }
+    return { fresh, missing, broken };
+  }
+  function paintLogos(li, w) {
+    const box = li.querySelector('.logo-rows');
+    if (!box) return;
+    const { fresh, missing, broken } = logoReport(w);
+    const logos = w.opts.logos || {};
+    const names = [];
+    for (const n of Array.isArray(w.opts.icons) ? w.opts.icons : []) if (!names.includes(n)) names.push(n);
+    for (const n of Object.keys(logos)) if (!names.includes(n)) names.push(n);
+    const rank = (n) => (logoFile(logos[n]) ? 1 : missing.has(n) ? 0 : 2);
+    names.sort((a, b) => rank(a) - rank(b));           // names without any logo first
+    const rows = names.map((n) => {
+      const file = logoFile(logos[n]);
+      const status = file
+        ? (!files.has(file) ? 'file missing: upload it again' : broken.has(file) ? 'not used: see the notes below' : 'your logo')
+        : missing.has(n) ? 'not in Simple Icons' : fresh ? 'from Simple Icons' : '…';
+      return { n, file, status, color: logoColor(logos[n]) };
+    });
+    const sig = JSON.stringify(rows.map((r) => [r.n, r.file, r.status]));
+    if (box.dataset.sig === sig) return;
+    box.dataset.sig = sig;
+    const act = document.activeElement;
+    const restore = act && box.contains(act) ? [act.dataset.logoName, act.dataset.logoAct] : null;
+    box.replaceChildren(...rows.map((r, i) => logoRow(w, r, i)));
+    if (!rows.length) box.append(h('p', { class: 'hint', text: 'Add names to icons first.' }));
+    if (restore) {
+      const pick = (a) => [...box.querySelectorAll('[data-logo-name]')].find((e) => e.dataset.logoName === restore[0] && e.dataset.logoAct === a);
+      const el = pick(restore[1]) || pick('upload');
+      if (el) el.focus();
+    }
+  }
+  function logoRow(w, r, i) {
+    const id = `lg-${w.uid}-${i}`;
+    const need = !r.file && r.status === 'not in Simple Icons';
+    return h('div', { class: 'logo-row' + (need ? ' need' : '') + (r.file ? ' has' : '') },
+      h('div', { class: 'logo-name' },
+        h('span', { class: 'name', text: r.n }),
+        h('span', { class: 'tag', text: r.status })),
+      h('div', { class: 'logo-actions' },
+        h('label', { class: 'btn file' + (need ? ' solid' : '') },
+          h('span', { 'aria-hidden': 'true', text: r.file ? 'Replace SVG' : 'Upload SVG' }),
+          h('input', { type: 'file', accept: '.svg,image/svg+xml', 'data-logo-name': r.n, 'data-logo-act': 'upload',
+            'aria-label': `${r.file ? 'Replace' : 'Upload'} an SVG logo for ${r.n}` })),
+        r.file ? h('button', { class: 'btn', type: 'button', 'data-logo-name': r.n, 'data-logo-act': 'remove', 'aria-label': `Remove the ${r.n} logo`, text: 'Remove' }) : null),
+      r.file ? h('div', { class: 'logo-color' },
+        h('label', { class: 'label', for: id + '-c', text: 'colour' }),
+        h('span', { class: 'chip', 'aria-hidden': 'true', style: HEX_RE.test(r.color) ? `background:${r.color}` : null }),
+        h('input', { id: id + '-c', type: 'text', value: r.color, placeholder: '#rrggbb', maxlength: '7', spellcheck: 'false', autocomplete: 'off',
+          'data-logo-name': r.n, 'data-logo-act': 'color', 'aria-describedby': id + '-ch' }),
+        h('p', { class: 'hint', id: id + '-ch', text: `Optional, for stiker themes; komik prints logos in ink. File: ${r.file}` })) : null);
+  }
+
+  async function onLogoFile(el) {
+    const li = el.closest('[data-uid]');
+    const w = state.widgets.find((x) => x.uid === li.dataset.uid);
+    const name = el.dataset.logoName;
+    const f = el.files && el.files[0];
+    const say = (t) => { li.querySelector('.logo-msg').textContent = t; };
+    if (!w || !f) return;
+    if (!(/\.svg$/i.test(f.name) || f.type === 'image/svg+xml')) { say(`“${f.name}” isn’t an SVG file. Pick a .svg logo.`); el.value = ''; return; }
+    if (f.size > LOGO_MAX) { say(`“${f.name}” is ${Math.ceil(f.size / 1024)} KB; a logo can be at most 200 KB. An optimiser like SVGO usually shrinks it.`); el.value = ''; return; }
+    let text;
+    try { text = (await f.text()).replace(/^\uFEFF/, ''); } catch (_) { say(`Couldn’t read “${f.name}”.`); return; }
+    el.value = '';
+    if (!/<svg[\s>]/i.test(text)) { say(`“${f.name}” doesn’t look like an SVG (there is no <svg> tag).`); return; }
+    if (!/\sviewBox=["'][^"']+["']/.test(text)) { say(`“${f.name}” has no viewBox. Add one to its <svg> tag, e.g. viewBox="0 0 24 24", and upload it again.`); return; }
+    const path = pathFor(w, name);
+    putFile(path, text);
+    const color = logoColor((w.opts.logos || {})[name]);
+    setLogo(w, name, HEX_RE.test(color) ? { file: path, color } : path);
+    say(`Using “${f.name}” for ${name}, saved as ${path}. Commit it at that path in your repo.`);
+    paintCard(w);
+    schedule(30);
+  }
+  $('#widgets').addEventListener('change', (e) => {
+    if (e.target.dataset && e.target.dataset.logoAct === 'upload') onLogoFile(e.target);
+  });
+  $('#widgets').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-logo-act="remove"]');
+    if (!b) return;
+    const li = b.closest('[data-uid]');
+    const w = state.widgets.find((x) => x.uid === li.dataset.uid);
+    const name = b.dataset.logoName;
+    setLogo(w, name, null);
+    gcFiles();
+    li.querySelector('.logo-msg').textContent = `Removed the ${name} logo.`;
+    paintCard(w);
+    schedule(30);
+  });
+  $('#widgets').addEventListener('input', (e) => {
+    const el = e.target;
+    if (!el.dataset || el.dataset.logoAct !== 'color') return;
+    const li = el.closest('[data-uid]');
+    const w = state.widgets.find((x) => x.uid === li.dataset.uid);
+    const name = el.dataset.logoName;
+    const v = el.value.trim();
+    const ok = v === '' || HEX_RE.test(v);
+    el.setAttribute('aria-invalid', ok ? 'false' : 'true');
+    if (!ok) return;
+    const file = logoFile((w.opts.logos || {})[name]);
+    setLogo(w, name, v ? { file, color: v } : file);
+    const chip = el.parentElement.querySelector('.chip');
+    if (chip) chip.style.background = v || '';
+    schedule(300);
+  });
+
   // ------------------------------------------------------------------ outputs
+  const tomlKey = (k) => (ID_RE.test(k) ? k : JSON.stringify(String(k)));
   function tomlValue(v) {
     if (Array.isArray(v)) return '[' + v.map(tomlValue).join(', ') + ']';
+    if (isTable(v)) return '{ ' + Object.entries(v).map(([k, x]) => `${tomlKey(k)} = ${tomlValue(x)}`).join(', ') + ' }';
     if (typeof v === 'boolean') return v ? 'true' : 'false';
     if (typeof v === 'number') return Number.isFinite(v) ? String(v) : '0';
     return JSON.stringify(String(v)).replace(/\u007f/g, '\\u007F');
@@ -604,6 +788,7 @@ jobs:
     for (const w of state.widgets) {
       out.push('');
       if (w.kind === 'mixtape') out.push('# put your own song in the repo and point song at it (only songs you have the rights to)');
+      if (w.kind === 'stack' && Object.keys(w.opts.logos || {}).length) out.push('# commit your logo files at these paths (the playground’s zip has them)');
       out.push('[[widget]]', `id = ${tomlValue(w.id)}`, `kind = ${tomlValue(w.kind)}`);
       for (const [k, v] of Object.entries(clean(w))) out.push(`${k} = ${tomlValue(v)}`);
     }
@@ -621,6 +806,11 @@ jobs:
     $('#out-toml').textContent = tomlText();
     $('#out-readme').textContent = readmeText();
     $('#out-workflow').textContent = WORKFLOW;
+    const used = [...referenced()].filter((p) => files.has(p));
+    $('#logo-note').hidden = !used.length;
+    $('#logo-note').textContent = used.length
+      ? `Your uploaded logo${used.length > 1 ? 's' : ''}: ${used.join(', ')}. Commit ${used.length > 1 ? 'them' : 'it'} to your profile repo at ${used.length > 1 ? 'those paths' : 'that path'}; “Download SVGs” includes ${used.length > 1 ? 'them' : 'it'}.`
+      : '';
     saveHashSoon();
   }
 
@@ -686,8 +876,10 @@ jobs:
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10000);
     const p = (m.info && m.info.problems) || [];
+    const logos = (m.info && m.info.logos) || [];
     announceOut(`Downloaded pernik-${state.user}.zip (${m.info ? m.info.files : '?'} widgets)` +
-      (p.length ? `, with ${p.length} problem(s): see pernik-problems.txt inside.` : '; pernik check passed.'));
+      (p.length ? `, with ${p.length} problem(s): see pernik-problems.txt inside.` : '; pernik check passed.') +
+      (logos.length ? ` It includes ${logos.join(', ')}: commit ${logos.length > 1 ? 'them' : 'it'} at the same path.` : ''));
   }
 
   // ------------------------------------------------------------------ share links
@@ -706,13 +898,27 @@ jobs:
   async function pipe(bytes, stream) {
     return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer());
   }
-  async function encodeState() {
-    const json = JSON.stringify({ v: 1, u: state.user, t: state.theme, w: state.widgets.map((w) => [w.id, w.kind, clean(w)]) });
-    const raw = new TextEncoder().encode(json);
+  async function encodeJson(obj) {
+    const raw = new TextEncoder().encode(JSON.stringify(obj));
     if (canZip) {
       try { return 'z=' + b64.enc(await pipe(raw, new CompressionStream('deflate-raw'))); } catch (_) { /* fall through */ }
     }
     return 'j=' + b64.enc(raw);
+  }
+  /** {hash, dropped}: uploaded logos ride along only while the hash stays under HASH_MAX. */
+  async function encodeState() {
+    const base = { v: 1, u: state.user, t: state.theme, w: state.widgets.map((w) => [w.id, w.kind, clean(w)]) };
+    const f = {};
+    for (const p of referenced()) if (files.has(p)) f[p] = files.get(p).text;
+    if (!Object.keys(f).length) return { hash: await encodeJson(base), dropped: false };
+    const full = await encodeJson(Object.assign({ f }, base));
+    if (full.length + 1 <= HASH_MAX) return { hash: full, dropped: false };
+    return { hash: await encodeJson(base), dropped: true };
+  }
+  function shareNote(dropped) {
+    const n = $('#share-note');
+    n.hidden = !dropped;
+    n.textContent = dropped ? 'Uploaded logos aren’t included in share links (too big); the link keeps the rest.' : '';
   }
   async function decodeState(hash) {
     const m = hash.replace(/^#/, '').match(/^([zj])=([A-Za-z0-9_-]+)$/);
@@ -724,6 +930,11 @@ jobs:
     }
     const d = JSON.parse(new TextDecoder().decode(bytes));
     if (!d || d.v !== 1 || !Array.isArray(d.w)) throw new Error('not a playground link');
+    if (isTable(d.f)) {
+      for (const [p, text] of Object.entries(d.f)) {
+        if (LOGO_PATH_RE.test(p) && typeof text === 'string' && text.length <= LOGO_MAX) putFile(p, text);
+      }
+    }
     const taken = [];
     const widgets = [];
     for (const [id, kind, opts] of d.w.slice(0, 40)) {
@@ -740,15 +951,20 @@ jobs:
   function saveHashSoon() {
     clearTimeout(hashTimer);
     hashTimer = setTimeout(async () => {
-      const hash = '#' + await encodeState();
-      if (location.hash !== hash) history.replaceState(null, '', hash);
+      const { hash, dropped } = await encodeState();
+      shareNote(dropped);
+      if (location.hash !== '#' + hash) history.replaceState(null, '', '#' + hash);
     }, 600);
   }
   $('#share').addEventListener('click', async () => {
-    const url = location.href.split('#')[0] + '#' + await encodeState();
+    const { hash, dropped } = await encodeState();
+    const url = location.href.split('#')[0] + '#' + hash;
     history.replaceState(null, '', url);
+    shareNote(dropped);
     const ok = await copy(url);
-    announceOut(ok ? 'Share link copied. It holds your whole design.' : 'Couldn’t copy; the link is in the address bar.');
+    announceOut(!ok ? 'Couldn’t copy; the link is in the address bar.'
+      : dropped ? 'Share link copied. Uploaded logos aren’t included in share links (too big).'
+        : 'Share link copied. It holds your whole design.');
   });
   $('#reset').addEventListener('click', () => {
     loadState(defaultState());
@@ -799,6 +1015,7 @@ jobs:
     state.widgets = s.widgets;
   }
   function rebuildAll() {
+    gcFiles();
     $('#user').value = state.user;
     buildThemes();
     buildAdd();

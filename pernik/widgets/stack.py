@@ -159,13 +159,13 @@ def custom_logo(root, spec, say):
     except OSError as e:
         say(f'could not read logo file "{rel}" ({e.strerror or e})')
         return None
-    vb = re.search(r'viewBox="([^"]+)"', raw)
+    vb = re.search(r'viewBox=["\']([^"\']+)["\']', raw)
     m = SAFE_VB.fullmatch(vb.group(1)) if vb else None
     if not m:
         say(f'logo file "{rel}" needs a viewBox, e.g. viewBox="0 0 24 24"')
         return None
     box = tuple(float(v) for v in m.groups())
-    ds = [d for d in re.findall(r'<path[^>]*\sd="([^"]+)"', raw) if SAFE_D.fullmatch(d)]
+    ds = [d for d in re.findall(r'<path[^>]*\sd=["\']([^"\']+)["\']', raw) if SAFE_D.fullmatch(d)]
     if not ds:
         say(f'logo file "{rel}" has no <path> shapes Pernik can use (convert shapes to paths first)')
         return None

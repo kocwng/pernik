@@ -4,6 +4,7 @@
    {type:'init'}                           {type:'status', text}  while loading
                                            {type:'ready', version, python, pyodide}
    {type:'demo', secs}                     the demo song's length (measured by the page)
+   {type:'file', path, text|null}          an uploaded logo (assets/logos/*.svg), or remove it
    {type:'render', uid, key, payload}      {type:'rendered', uid, key, result}
    {type:'zip', toml, readme, user}        {type:'zip', bytes, info} or {type:'zip', error}
                                            {type:'fatal', text}  if loading failed
@@ -66,8 +67,11 @@ self.onmessage = (e) => {
     return;
   }
   if (m.type === 'render') {
+    // drop a waiting render of the same widget and queue this one last, so it runs after
+    // any file messages (uploaded logos) sent before it
     const i = queue.findIndex((q) => q.type === 'render' && q.uid === m.uid);
-    if (i >= 0) queue[i] = m; else queue.push(m);
+    if (i >= 0) queue.splice(i, 1);
+    queue.push(m);
   } else {
     queue.push(m);
   }
@@ -106,6 +110,8 @@ async function handle(m) {
   if (m.type === 'render') {
     const result = JSON.parse(bridge.render(JSON.stringify(m.payload)));
     post({ type: 'rendered', uid: m.uid, key: m.key, result });
+  } else if (m.type === 'file') {
+    bridge.put_file(m.path, m.text === undefined ? null : m.text);
   } else if (m.type === 'demo') {
     demoSecs = m.secs || 0;
     if (demo) bridge.set_demo(demo, demoSecs);

@@ -103,6 +103,8 @@ class IconNameTests(unittest.TestCase):
             self.assertEqual(box, (0, 0, 100, 50))
             self.assertEqual(color, '#FF9900')
             self.assertIsNone(custom_logo(d, '../outside.svg', lambda *a: None))
+            write(d, 'assets/y.svg', "<svg viewBox='0 0 24 24'><path d='M0 0h24v24z'/></svg>")
+            self.assertEqual(custom_logo(d, 'assets/y.svg', print)[1], (0, 0, 24, 24))
 
 
 class CheckTests(unittest.TestCase):

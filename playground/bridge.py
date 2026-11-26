@@ -4,6 +4,7 @@ worker.js unpacks pernik.zip next to this file, imports it and calls:
 
     setup()                 patch the bits a browser can't do, return {"version", "python"}
     set_demo(bytes, secs)   the demo song (bytes) and its length (measured by the page)
+    put_file(path, text)    an uploaded logo at assets/logos/<name>.svg (None removes it)
     render(payload_json)    draw one widget in both modes -> JSON {light, dark, alt, logs, ...}
     make_zip(toml, readme, user)  run Pernik's real build + check on a fresh virtual repo -> zip bytes
 
@@ -21,6 +22,7 @@ import io
 import json
 import os
 import posixpath
+import re
 import shutil
 import sys
 import time
@@ -31,7 +33,8 @@ REPO = '/repo'                 # the virtual profile repo widgets render into
 BUILD = '/build'               # a fresh repo for each "download" build
 CACHE = os.path.join(REPO, '.pernik-cache')
 AUDIO = ('.mp3', '.m4a', '.ogg', '.wav', '.flac', '.aac', '.opus')
-_state = {'demo': None, 'secs': 0.0, 'themes': {}}
+LOGO_PATH = re.compile(r'assets/logos/[a-z0-9][a-z0-9._-]{0,60}\.svg')
+_state = {'demo': None, 'secs': 0.0, 'themes': {}, 'files': {}}
 
 
 # ---------------------------------------------------------------- browser replacements
@@ -88,6 +91,36 @@ def _ensure_song(root, song):
         os.makedirs(os.path.dirname(path) or root, exist_ok=True)
         with open(path, 'wb') as f:
             f.write(_state['demo'])
+
+
+def put_file(path, text):
+    """Keep an uploaded logo (only under assets/logos/) and write it into the preview repo."""
+    path = str(path or '')
+    if not LOGO_PATH.fullmatch(path) or '..' in path:
+        return False
+    full = os.path.join(REPO, path)
+    if text is None:
+        _state['files'].pop(path, None)
+        if os.path.exists(full):
+            os.remove(full)
+        return True
+    _state['files'][path] = str(text)
+    os.makedirs(os.path.dirname(full), exist_ok=True)
+    with open(full, 'w', encoding='utf-8') as f:
+        f.write(str(text))
+    return True
+
+
+def _logo_files(widgets):
+    """The uploaded files the stack widgets' `logos` tables point at."""
+    out = []
+    for w in widgets:
+        logos = w.get('logos') if w.get('kind') == 'stack' else None
+        for spec in (logos.values() if isinstance(logos, dict) else ()):
+            rel = spec.get('file') if isinstance(spec, dict) else spec
+            if isinstance(rel, str) and rel in _state['files'] and rel not in out:
+                out.append(rel)
+    return out
 
 
 def _theme(name):
@@ -166,9 +199,16 @@ def make_zip(toml_text, readme_text, user):
     shutil.rmtree(BUILD, ignore_errors=True)
     os.makedirs(BUILD)
     os.symlink(CACHE, os.path.join(BUILD, '.pernik-cache'))
-    for w in tomllib.loads(toml_text).get('widget', []):
+    widgets = tomllib.loads(toml_text).get('widget', [])
+    for w in widgets:
         if w.get('kind') == 'mixtape':
             _ensure_song(BUILD, w.get('song'))
+    logos = _logo_files(widgets)
+    for rel in logos:                     # uploaded logos go in at the paths pernik.toml names
+        full = os.path.join(BUILD, rel)
+        os.makedirs(os.path.dirname(full), exist_ok=True)
+        with open(full, 'w', encoding='utf-8') as f:
+            f.write(_state['files'][rel])
     config = os.path.join(BUILD, 'pernik.toml')
     with open(config, 'w', encoding='utf-8') as f:
         f.write(toml_text)
@@ -201,7 +241,7 @@ def make_zip(toml_text, readme_text, user):
                 z.write(path, os.path.relpath(path, BUILD))
         if problems:
             z.writestr('pernik-problems.txt', '\n'.join(problems) + '\n')
-    _state['last_build'] = {'problems': problems, 'files': len(manifest),
+    _state['last_build'] = {'problems': problems, 'files': len(manifest), 'logos': logos,
                             'log': [ln for ln in log.getvalue().splitlines() if ln.strip()][:40]}
     return buf.getvalue()
 
