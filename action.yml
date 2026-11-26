@@ -43,6 +43,7 @@ runs:
       env:
         PYTHONPATH: ${{ github.action_path }}
         CONFIG: ${{ inputs.config }}
+        PERNIK_UPLOAD: ${{ inputs.token != '' && '1' || '' }}
       run: echo "needed=$(python -m pernik needs-extras "$CONFIG")" >> "$GITHUB_OUTPUT"
 
     - name: Install ffmpeg, numpy, scipy and Pillow
@@ -59,6 +60,7 @@ runs:
       env:
         PYTHONPATH: ${{ github.action_path }}
         CONFIG: ${{ inputs.config }}
+        PERNIK_UPLOAD: ${{ inputs.token != '' && '1' || '' }}
       run: |
         set +e
         python -m pernik build "$CONFIG"
@@ -72,6 +74,7 @@ runs:
         PYTHONPATH: ${{ github.action_path }}
         CONFIG: ${{ inputs.config }}
         GH_TOKEN: ${{ inputs.token }}
+        PERNIK_UPLOAD: "1"
       run: |
         set +e
         python -m pernik media "$CONFIG"

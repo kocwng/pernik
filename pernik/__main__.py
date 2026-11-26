@@ -32,8 +32,21 @@ def main(argv=None):
         from .config import load_config
         from .widgets import load_all
         reg = load_all()
-        kinds = {w['kind'] for w in load_config(config)['widgets']} if os.path.exists(config) else set()
-        print('true' if any(reg[k].heavy for k in kinds if k in reg) else 'false')
+        if not os.path.exists(config):
+            print('false')
+            return 0
+        cfg = load_config(config)
+        need = False
+        for w in cfg['widgets']:
+            spec = reg.get(w['kind'])
+            if not spec or not spec.heavy:
+                continue
+            if w['kind'] == 'mixtape':
+                from .widgets.mixtape import needs_extras
+                need = need or needs_extras(w, w['id'], cfg)
+            else:
+                need = True
+        print('true' if need else 'false')
         return 0
     if cmd == 'media':                    # the Action runs this when PERNIK_TOKEN is set
         from .media import MediaError, upload

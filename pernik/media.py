@@ -90,6 +90,7 @@ def pending(config_path):
 def upload(config_path, log=print):
     """Upload what's pending. Returns the number of videos uploaded."""
     from .widgets.mixtape import media_path, read_media
+    from .widgets.mixtape import source_key, theme_name
     cfg, todo = pending(config_path)
     if not todo:
         log('media: nothing to upload')
@@ -117,7 +118,9 @@ def upload(config_path, log=print):
         if not found:
             raise MediaError('the comment has no user-attachments link; GitHub may have changed how uploads work')
         old = media.get(wid, {}).get('comment')
-        media[wid] = {'url': found.group(0), 'stamp': stamp, 'comment': cid, 'issue': number}
+        opts = next(w for w in cfg['widgets'] if w['id'] == wid)
+        media[wid] = {'url': found.group(0), 'stamp': stamp, 'comment': cid, 'issue': number,
+                      'source': source_key(opts, wid, cfg['user'], theme_name(cfg), cfg['root'])}
         if old and old != cid:
             gh('api', '-X', 'DELETE', f'repos/{repo}/issues/comments/{old}', check=False)
         done += 1

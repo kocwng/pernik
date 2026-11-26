@@ -320,6 +320,50 @@ def read_media(path):
         return {}
 
 
+VIDEO_VERSION = 1
+
+
+def _key(song_abs, label, side, theme_name):
+    return hashlib.sha1(json.dumps([sha1(song_abs) if os.path.isfile(song_abs) else '', label, side,
+                                    str(theme_name), VIDEO_VERSION]).encode()).hexdigest()[:16]
+
+
+def source_key(opts, widget_id, user, theme_name, root):
+    """A cheap fingerprint of what the video shows (no ffmpeg needed), to tell if it's stale."""
+    song = os.path.join(root, str(opts.get('song') or ''))
+    label = str(opts.get('label') or '').strip() or f'{user} tape'
+    side = (str(opts.get('side') or 'A').strip() or 'A')[:2]
+    return _key(song, label, side, theme_name)
+
+
+def theme_name(cfg):
+    from ..theme import load_theme
+    return load_theme(cfg['theme'], cfg['root']).name
+
+
+def needs_extras(opts, widget_id, cfg):
+    """Does this mixtape have work only numpy/ffmpeg can do? (So the Action can skip installing them.)"""
+    root = cfg['root']
+    song = os.path.join(root, str(opts.get('song') or ''))
+    if not os.path.isfile(song):
+        return False
+    mode = str(opts.get('chords', 'auto')).strip().lower()
+    if mode == 'auto':
+        page_dir = str(opts.get('page_dir') or f'docs/{widget_id}').strip('/')
+        try:
+            with open(os.path.join(root, page_dir, 'chords.json'), encoding='utf-8') as f:
+                if json.load(f).get('source_sha1') != sha1(song):
+                    return True
+        except (OSError, ValueError, AttributeError):
+            return True
+    if opts.get('make_video'):
+        return True
+    if str(opts.get('video') or '').strip().lower() == 'auto' and os.environ.get('PERNIK_UPLOAD'):
+        entry = read_media(media_path(root, cfg['output'])).get(widget_id) or {}
+        return entry.get('source') != source_key(opts, widget_id, cfg['user'], theme_name(cfg), root)
+    return False
+
+
 def auto_video_url(t, ctx):
     entry = read_media(media_path(ctx)).get(ctx.widget_id) or {}
     url, have = entry.get('url', ''), entry.get('stamp', '')
@@ -384,7 +428,9 @@ def settings(opts, ctx):
         'link': str(opts.get('link') or '').strip() or page_url or f'https://github.com/{owner}/{repo}',
         'page_dir': page_dir, 'pages': pages, 'page_url': page_url, 'chords': mode,
         'chords_file': chords_file, 'video': video, 'video_auto': video_auto,
-        'make_video': bool(opts.get('make_video')) or video_auto,
+        # in the Action, an auto video is only worth rendering when it can be uploaded
+        'make_video': bool(opts.get('make_video')) or (video_auto and not (
+            os.environ.get('GITHUB_ACTIONS') and not os.environ.get('PERNIK_UPLOAD'))),
         'duration': secs, 'length': length_text(secs), 'owner': owner, 'repo': repo,
     }
 
@@ -525,6 +571,12 @@ def update_chords(t, ctx):
 
 
 def make_video(t, ctx):
+    if t['video_auto']:
+        entry = read_media(media_path(ctx)).get(ctx.widget_id) or {}
+        if entry.get('url') and entry.get('source') == _key(t['song_abs'], t['label'], t['side'], ctx.theme.name):
+            _STAMPS[(ctx.root, ctx.widget_id)] = entry.get('stamp')
+            ctx.log('video: the uploaded video is up to date')
+            return
     outrel = os.path.relpath(ctx.out, ctx.root).replace(os.sep, '/')
     rel = posixpath.join(outrel, f'{ctx.widget_id}.mp4')
     path = os.path.join(ctx.root, rel)
