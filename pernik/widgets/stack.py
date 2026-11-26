@@ -216,12 +216,13 @@ def _toml_key(k):
     return k if re.fullmatch(r'[A-Za-z0-9_-]+', k) else '"' + k.replace('"', '') + '"'
 
 
-@widget('stack', defaults={'numbered': True, 'icons': ['python', 'git', 'docker'], 'columns': 0, 'size': 80, 'labels': True})
+@widget('stack', defaults={'density': 'panels', 'numbered': True, 'icons': ['python', 'git', 'docker'], 'columns': 0, 'size': 80, 'labels': True})
 def stack(opts, ctx):
     """Tech-stack logos as die-cut stickers (Simple Icons slugs).
 
     icons    e.g. ["go", "docker", "kafka"]: Simple Icons names; titles and single words work too
     logos    your own logo files for names Simple Icons lacks, e.g. { aws = "assets/aws.svg" }
+    density  komik only: "panels" (big comic panels) or "compact" (small chips, four to a row)
     columns  tiles per row; 0 = as many as fit
     size     tile width in px (48-140)
     labels   show the name under the logo

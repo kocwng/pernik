@@ -4,6 +4,9 @@ Each panel has an ink title bar (the tool's name), its logo large in the middle 
 jagged halftone burst, and a numbered badge in the corner (the order is the user's order).
 Logos are Simple Icons, fetched and cached by stack.py; brand colours are not used (two-tone
 rule). Unknown slugs get a big monogram letter instead of a logo. Rules: docs/design.md
+
+density = "compact" draws chips instead: a small logo tile and the name, four to a row. Use it
+for long lists, where big panels would make the tech stack the longest part of the page.
 """
 import math
 import random
@@ -33,7 +36,14 @@ def _columns(n_items, want):
     return min((3, 4), key=lambda c: (math.ceil(n_items / c), -(n_items % c or c) / c, c))
 
 
+CHIP_H = 48        # compact chips
+CHIP_GAP = 12
+CHIP_LOGO = 28
+
+
 def render(opts, ctx):
+    if str(opts.get('density', 'panels')).strip().lower() == 'compact':
+        return render_compact(opts, ctx)
     k = K.Kit(ctx.theme, ctx.mode)
     say = ctx.log if ctx.mode == 'light' else (lambda *a: None)
     icons = opts.get('icons') or []
@@ -222,3 +232,68 @@ def compact_path(d):
         if C == 'M':
             sx, sy, qsx, qsy = cx, cy, qx, qy
     return ''.join(out)
+
+
+# ---------------------------------------------------------------- density = "compact"
+
+def render_compact(opts, ctx):
+    """Chips: [logo tile | NAME], four to a row (columns = 2..6 to change it), no bursts or numbers."""
+    k = K.Kit(ctx.theme, ctx.mode)
+    say = ctx.log if ctx.mode == 'light' else (lambda *a: None)
+    icons = opts.get('icons') or []
+    if isinstance(icons, str):
+        icons = [i for i in re.split(r'[,\s]+', icons) if i]
+    icons = [str(i).strip() for i in icons if str(i).strip()][:48]
+    try:
+        cols = int(opts.get('columns') or 0)
+    except (TypeError, ValueError):
+        cols = 0
+    cols = max(2, min(6, cols)) if cols else 4
+
+    idx = _index(ctx.root, say) if icons else {}
+    logos = opts.get('logos') or {}
+    logos = logos if isinstance(logos, dict) else {}
+    items = [resolve(raw, ctx, idx, logos, say) for raw in icons]
+
+    rows = max(1, math.ceil(len(items) / cols))
+    inner = W - 2 * PAD
+    cw = (inner - (cols - 1) * CHIP_GAP) / cols
+    h = 2 * PAD + rows * CHIP_H + (rows - 1) * CHIP_GAP
+    tile = CHIP_H - 16                         # the logo tile inside the chip
+    chips = []
+    for i, (title, d, box, _, rule) in enumerate(items):
+        r, c = divmod(i, cols)
+        x = PAD + c * (cw + CHIP_GAP)
+        y = PAD + r * (CHIP_H + CHIP_GAP)
+        tx, ty = x + 8, y + 8
+        g = [f'<rect x="{n(x)}" y="{n(y)}" width="{n(cw)}" height="{CHIP_H}" rx="{K.R_PANEL}" fill="{k.paper}" '
+             f'stroke="{k.ink}" stroke-width="{K.LINE}"/>',
+             f'<rect x="{n(tx)}" y="{n(ty)}" width="{tile}" height="{tile}" rx="{K.R_LABEL + 2}" fill="url(#ht1)" '
+             f'stroke="{k.ink}" stroke-width="{K.HAIR}"/>']
+        if d:
+            off = (tile - CHIP_LOGO) / 2
+            tf, sc = logo_transform(tx + off, ty + off, CHIP_LOGO, box)
+            path = compact_path(d) if box == (0, 0, 24, 24) else d
+            fr = f' fill-rule="{rule}"' if rule else ''
+            g.append(f'<path transform="{tf}" d="{path}" fill="{k.ink}"{fr} stroke="{k.paper}" '
+                     f'stroke-width="{3 / sc:.2f}" stroke-linejoin="round" paint-order="stroke"/>')
+        else:
+            letter = next((ch for ch in title if ch.isalnum()), '?').upper()
+            g.append(f'<text x="{n(tx + tile / 2)}" y="{n(ty + tile / 2 + 7)}" font-size="20" text-anchor="middle" '
+                     f'class="kl" fill="{k.ink}" stroke="{k.paper}" stroke-width="3" paint-order="stroke">'
+                     f'{K.esc(letter)}</text>')
+        room = cw - tile - 8 - 12 - 10
+        shown, size = fit_label(title, room, 14, 9)
+        g.append(label_text(tx + tile + 12, y + CHIP_H / 2 + size * .36, shown, size, k.ink))
+        chips.append(f'<g class="arrive a{min(i, 7)}">{"".join(g)}</g>')
+    if not items:
+        chips.append(f'<text x="{W / 2:g}" y="{h / 2 + 5:g}" font-size="14" text-anchor="middle" class="km" '
+                     f'fill="{k.ink}">no tools listed yet</text>')
+    names = [t[0] for t in items]
+    title = 'Tech stack: ' + ', '.join(names) if names else 'Tech stack'
+    svg = k.doc(W, h, k.card(0, 0, W, h) + ''.join(chips), title=title,
+                desc=f'{len(items)} tools as small labelled chips: ' + ', '.join(names) + '.' if names else 'No tools listed yet.',
+                css=k.css_arrive(delay_step=.05, count=8))
+    if len(svg.encode()) > 25 * 1024:
+        say(f'{len(svg.encode()) // 1024} KB, over the 25 KB budget; try fewer icons')
+    return Out(svg=svg, alt=title)
